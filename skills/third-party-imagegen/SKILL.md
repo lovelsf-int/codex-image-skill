@@ -1,15 +1,15 @@
 ---
 name: third-party-imagegen
-description: Use when generating images through the active Codex provider, a third-party OpenAI-compatible token service, or a gpt-image-2 request that must not use Codex built-in image generation.
+description: Use when generating or editing images through the configured Danko MCP, or when a legacy text-to-image CLI request must follow the active Codex provider.
 ---
 
 # Third-Party Image Generation
 
-When the Danko image MCP server is configured, use it as the intended
-replacement path for normal Codex image work. Call `generate_danko_image` for
-text-to-image requests and `edit_danko_image` for edits instead of the built-in
-`image_gen` tool. This selects the configured MCP workflow; it does not disable,
-remove, or modify Codex's built-in tool.
+When the Danko-specific image MCP server is configured, use it as the intended
+replacement path for normal Codex image work. It supports text-to-image through
+`generate_danko_image` and local image-to-image through `edit_danko_image`,
+instead of the built-in `image_gen` tool. This selects the configured MCP
+workflow; it does not disable, remove, or modify Codex's built-in tool.
 
 The bundled CLI remains a compatibility fallback for an explicitly requested
 legacy workflow. It is not the default when the Danko MCP is available.
@@ -42,8 +42,9 @@ legacy workflow. It is not the default when the Danko MCP is available.
 ## CLI Compatibility Fallback
 
 - Use `scripts/generate_image.py` only when the user explicitly needs the
-  compatibility CLI. Its available selector is `--source auto|codex|env` and
-  it defaults to `--source auto`.
+  compatibility CLI. It is a legacy text-to-image-only path; it does not
+  support image-to-image or image editing. Its available selector is
+  `--source auto|codex|env` and it defaults to `--source auto`.
 - `--source auto` follows the active Codex provider using live `CODEX_HOME`
   configuration (or `--codex-home PATH`). `--source codex` requires a usable
   Codex route; `--source env` is for the legacy explicit `OPENAI_API_KEY` and

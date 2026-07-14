@@ -2,28 +2,33 @@
 
 [简体中文](README.md)
 
-Generate a single image through an OpenAI-compatible image endpoint while
-following the active Codex provider by default. The Skill uses `gpt-image-2`
-unless another `gpt-image-*` model is explicitly requested. It uses only its
-bundled API and CLI path; it never modifies, replaces, or invokes Codex's
-built-in `image_gen` tool.
+This repository documents two separate image workflows. The Danko-specific MCP
+is the recommended path and supports text-to-image plus local image-to-image.
+The older bundled CLI is a legacy, text-to-image-only path that follows the
+active Codex provider. Both use `gpt-image-2` unless another `gpt-image-*`
+model is explicitly requested.
 
 ## Scope
 
-- Generate one image from a text prompt.
-- Use the active Codex or CC Switch route without duplicating its URL or key.
-- Support an explicit legacy environment route when requested.
-- Accept base64 image responses in `data[].b64_json`.
+- **Danko MCP (recommended):** Danko-specific text-to-image and local
+  image-to-image requests.
+- **Legacy CLI:** text-to-image only through the active Codex or CC Switch
+  route, with an explicit legacy environment route when requested.
+- Both workflows accept base64 image responses in `data[].b64_json`.
 
-Image editing, masks, batch generation, transparency-specific workflows, and
-URL-only responses are outside this Skill's scope.
+The legacy CLI does not support image-to-image or image editing. Masks, batch
+generation, transparency-specific workflows, and URL-only responses are outside
+both workflows' scope.
 
 ## Requirements
 
 - Codex with personal Skills enabled
 - Python 3.10+
-- An active provider that accepts Bearer authentication and implements
-  `POST /v1/images/generations`
+- **Danko MCP:** either a forwarded `DANKOTOKEN_API_KEY` or a coherent active
+  Codex Danko route that accepts Bearer authentication and implements
+  `POST /v1/images/generations` and `POST /v1/images/edits`
+- **Legacy CLI:** an active provider that accepts Bearer authentication and
+  implements `POST /v1/images/generations`
 - Access to the requested `gpt-image-*` model
 - A response containing `data[].b64_json`
 
@@ -59,12 +64,14 @@ Only Python 3.10 needs the conditional `tomli` compatibility dependency (`python
 
 ## Danko MCP Image Tools (Recommended)
 
-When configured, the Danko image MCP is the intended replacement path for
-normal Codex image work: use `generate_danko_image` for text-to-image and
-`edit_danko_image` for edits instead of the built-in `image_gen` tool. This
-selects an image-generation workflow; it does not technically disable, remove,
-or modify Codex's built-in tool. The CLI documented below remains a
-compatibility fallback, not the default when the MCP is available.
+When configured, the Danko-specific image MCP is the intended replacement path
+for normal Codex image work. It supports text-to-image with
+`generate_danko_image` and local image-to-image with `edit_danko_image`,
+instead of the built-in `image_gen` tool. It does not follow an arbitrary active
+Codex provider. This selects an image-generation workflow; it does not technically disable, remove,
+or modify Codex's built-in tool. The legacy CLI
+documented below remains a text-to-image-only compatibility fallback, not the
+default when the MCP is available.
 
 Add this secret-free MCP configuration to Codex, replacing the placeholder
 paths with local absolute paths. `env_vars` forwards variable names only; never
@@ -120,11 +127,12 @@ edit_danko_image(
 )
 ```
 
-## Default Behavior: Follow Codex
+## Legacy CLI: Active Codex Provider Text-to-Image
 
-The route selector is `--source auto|codex|env`. When `--source` is omitted,
-`auto` is used. It first resolves the complete route currently selected by
-Codex, so users normally do not need to duplicate an API URL or credential.
+This section applies only to the legacy text-to-image CLI. The route selector
+is `--source auto|codex|env`. When `--source` is omitted, `auto` is used. It
+first resolves the complete route currently selected by Codex, so users
+normally do not need to duplicate an API URL or credential.
 
 - `--source auto` first uses the active Codex route. It falls back to the
   environment route only when Codex configuration is unavailable and the
@@ -150,7 +158,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --dry-run
 ```
 
-## Codex Home Selection
+### Codex Home Selection
 
 `CODEX_HOME` selects the Codex configuration directory. The `--codex-home`
 option takes priority when a command must inspect another Codex installation.
@@ -167,7 +175,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --out output/keyboard.png
 ```
 
-## Standard Codex Provider Example
+### Standard Codex Provider Example
 
 Codex selects one provider through `model_provider`. The configuration below is
 a standard DankoToken example. DankoToken has no hardcoded priority: the active
@@ -188,7 +196,7 @@ the credential from provider-scoped `experimental_bearer_token`, the environment
 variable named by `env_key`, or a supported provider auth command. It does not
 inspect inactive provider entries.
 
-## CC Switch Compatibility
+### CC Switch Compatibility
 
 The live Codex configuration written by the open-source CC Switch desktop app is
 the source of truth. The Skill supports all three CC Switch integration modes:
@@ -213,7 +221,7 @@ requirement.
 The Skill never reads the CC Switch SQLite database. It only follows the live
 Codex files and supported environment or auth-command sources described above.
 
-## Explicit Environment Fallback
+### Explicit Environment Fallback
 
 Use the environment route only for an existing explicit setup or when
 `--source env` is intentionally selected. Live generation requires both
@@ -242,7 +250,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --out output/keyboard.png
 ```
 
-## CLI Examples
+### CLI Examples
 
 Follow the current Codex provider and use the default `gpt-image-2` model:
 
@@ -273,7 +281,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --force
 ```
 
-## Security and Output Contract
+### Security and Output Contract
 
 - The Skill never requests, prints, or writes credentials into chat output.
 - OAuth fields including `tokens`, `access_token`, and `refresh_token` are not
@@ -286,12 +294,14 @@ python skills/third-party-imagegen/scripts/generate_image.py \
 
 Sanitized summary fields are exactly and only: `source`, `provider`, `credential_source`, `host`, `model`, `output`, `output_format`, `quality`, and `size`. `key`, `prompt`, `config`, OAuth data, and token values are never included.
 
-## Provider Compatibility
+### Provider Compatibility
 
-The provider must support the requested `gpt-image-*` model, Bearer
-authentication, `/v1/images/generations`, and `data[].b64_json`. Providers may
-differ in their accepted `size`, `quality`, and `output_format` values. URL-only
-responses are unsupported.
+For the legacy CLI, the selected provider must support the requested
+`gpt-image-*` model, Bearer authentication, `/v1/images/generations`, and
+`data[].b64_json`. The Danko MCP is limited to its dedicated Danko route and
+also uses `/v1/images/edits` for local image-to-image. Providers may differ in
+their accepted `size`, `quality`, and `output_format` values. URL-only responses
+are unsupported.
 
 ## Testing and Compatibility Matrix
 

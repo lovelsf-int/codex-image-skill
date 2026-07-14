@@ -2,24 +2,26 @@
 
 [English](README.en.md)
 
-通过兼容 OpenAI 的图片接口生成单张图片，并默认跟随 Codex 当前启用的提供商。
-除非明确指定其他 `gpt-image-*` 模型，否则本 Skill 使用 `gpt-image-2`。它只使用
-仓库内置的 API 和命令行流程，不会修改、替换或调用 Codex 内置的 `image_gen` 工具。
+本仓库包含两条独立的图片工作流。Danko 专用 MCP 是推荐路径，支持文本生成图像和基于本地
+参考图的图生图；较早的内置 CLI 是仅文本生成图像的旧版路径，并跟随当前活动的 Codex 提供商。
+除非明确指定其他 `gpt-image-*` 模型，否则两条工作流都使用 `gpt-image-2`。
 
 ## 适用范围
 
-- 根据文本提示词生成单张图片。
-- 复用当前 Codex 或 CC Switch 路由，无需重复填写 URL 或密钥。
-- 在明确要求时支持旧式环境变量路由。
-- 接收 `data[].b64_json` 中的 Base64 图片响应。
+- **Danko MCP（推荐）：** Danko 专用的文本生成图像和基于本地参考图的图生图请求。
+- **旧版 CLI：** 仅文本生成图像，复用当前 Codex 或 CC Switch 路由；在明确要求时支持旧式环境变量路由。
+- 两条工作流都接收 `data[].b64_json` 中的 Base64 图片响应。
 
-本 Skill 不支持图片编辑、遮罩、批量生成、透明背景专用流程或仅返回 URL 的响应。
+旧版 CLI 不支持图生图或图片编辑。遮罩、批量生成、透明背景专用流程和仅返回 URL 的响应不属于
+两条工作流的范围。
 
 ## 使用要求
 
 - 已启用个人 Skills 的 Codex
 - Python 3.10+
-- 当前提供商支持 Bearer 身份验证并实现 `POST /v1/images/generations`
+- **Danko MCP：** 已转发的 `DANKOTOKEN_API_KEY`，或一条完整、活动的 Danko Codex 路由；它必须支持
+  Bearer 身份验证、`POST /v1/images/generations` 和 `POST /v1/images/edits`
+- **旧版 CLI：** 当前提供商支持 Bearer 身份验证并实现 `POST /v1/images/generations`
 - 当前账号能够使用请求的 `gpt-image-*` 模型
 - 接口响应包含 `data[].b64_json`
 
@@ -52,10 +54,11 @@ cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 
 只有 Python 3.10 需要条件依赖 `tomli`（`python_version < '3.11'`）；Python 3.11 及更高版本使用标准库中的 TOML 解析器。
 
-## 默认行为：跟随 Codex
+## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）
 
-路由选择参数是 `--source auto|codex|env`。省略 `--source` 时默认使用 `auto`，
-它会优先解析 Codex 当前选中的完整路由，因此用户通常不需要重复配置 API URL 或密钥。
+本节仅适用于旧版的文本生成图像 CLI。路由选择参数是 `--source auto|codex|env`。省略
+`--source` 时默认使用 `auto`，它会优先解析 Codex 当前选中的完整路由，因此用户通常不需要
+重复配置 API URL 或密钥。
 
 - `--source auto` 优先使用当前 Codex 路由。只有在 Codex 配置不可用，并且环境变量能
   满足当前运行模式的路由要求时，才回退到环境变量路由。
@@ -76,7 +79,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --dry-run
 ```
 
-## Codex Home 选择
+### Codex Home 选择
 
 `CODEX_HOME` 用于指定 Codex 配置目录。需要检查另一套 Codex 安装时，
 `--codex-home` 参数的优先级高于 `CODEX_HOME`。
@@ -93,7 +96,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --out output/keyboard.png
 ```
 
-## 标准 Codex 提供商示例
+### 标准 Codex 提供商示例
 
 Codex 通过 `model_provider` 选择一个提供商。下面是标准的 DankoToken 配置示例，
 并不代表优先级规则；当前启用的 `model_provider` 始终是唯一依据。
@@ -112,7 +115,7 @@ wire_api = "responses"
 `experimental_bearer_token`、由 `env_key` 指定的环境变量或受支持的提供商
 身份验证命令获取凭证。它不会检查未启用的提供商条目。
 
-## CC Switch 兼容性
+### CC Switch 兼容性
 
 开源 CC Switch 桌面应用写入的实时 Codex 配置是唯一依据。本 Skill 支持全部三种
 CC Switch 接入模式：
@@ -132,7 +135,7 @@ CC Switch 接入模式：
 本 Skill 从不读取 CC Switch SQLite 数据库，只跟随上述实时 Codex 文件以及受支持的
 环境变量或身份验证命令来源。
 
-## 显式环境变量回退
+### 显式环境变量回退
 
 仅在维护现有显式配置或主动选择 `--source env` 时使用环境变量路由。实时生成必须同时
 设置 `OPENAI_BASE_URL` 和 `OPENAI_API_KEY`；使用 `--dry-run` 时仍需有效 URL，
@@ -160,7 +163,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --out output/keyboard.png
 ```
 
-## 命令行示例
+### 命令行示例
 
 跟随当前 Codex 提供商，并使用默认的 `gpt-image-2` 模型：
 
@@ -191,7 +194,7 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --force
 ```
 
-## 安全与输出契约
+### 安全与输出契约
 
 - 本 Skill 不会请求、打印或把凭证写入聊天输出。
 - 不读取或使用 `tokens`、`access_token`、`refresh_token` 等 OAuth 字段。
@@ -203,11 +206,12 @@ python skills/third-party-imagegen/scripts/generate_image.py \
 
 脱敏摘要字段严格且仅限以下九项：`source`、`provider`、`credential_source`、`host`、`model`、`output`、`output_format`、`quality` 和 `size`。摘要绝不包含 `key`、`prompt`、`config`、OAuth 数据或任何 token 值。
 
-## 提供商兼容性
+### 提供商兼容性
 
-提供商必须支持请求的 `gpt-image-*` 模型、Bearer 身份验证、
-`/v1/images/generations` 和 `data[].b64_json`。不同提供商对 `size`、`quality`、
-`output_format` 可选值的支持可能不同。本 Skill 不支持仅返回 URL 的响应。
+对于旧版 CLI，所选提供商必须支持请求的 `gpt-image-*` 模型、Bearer 身份验证、
+`/v1/images/generations` 和 `data[].b64_json`。Danko MCP 仅限其专用 Danko 路由，并使用
+`/v1/images/edits` 进行基于本地参考图的图生图。不同提供商对 `size`、`quality`、
+`output_format` 可选值的支持可能不同。本仓库不支持仅返回 URL 的响应。
 
 ## 测试与兼容矩阵
 
@@ -222,10 +226,10 @@ Skill 和文档契约；工作流不会调用真实图片接口。
 
 ## Danko MCP 图像工具（推荐）
 
-配置 Danko image MCP 后，它是正常 Codex 图像请求的预期替代路径：文本生成图像请使用
-`generate_danko_image`，图像编辑请使用 `edit_danko_image`，而不是内置的 `image_gen` 工具。
-这是工作流选择，不会在技术上禁用、移除或修改 Codex 的内置工具。下面的 CLI 仍可用于兼容性回退，
-但在 MCP 可用时不是默认路径。
+配置 Danko 专用 image MCP 后，它是正常 Codex 图像请求的预期替代路径：文本生成图像请使用
+`generate_danko_image`，基于本地参考图的图生图请使用 `edit_danko_image`，而不是内置的
+`image_gen` 工具。它不会跟随任意活动的 Codex 提供商。这是工作流选择，不会在技术上禁用、移除或修改 Codex 的内置工具。
+下面的旧版 CLI 仍可用于仅文本生成图像的兼容性回退，但在 MCP 可用时不是默认路径。
 
 将下面的无密钥 MCP 配置加入 Codex，并将占位路径替换为本机绝对路径。`env_vars` 只转发环境变量名，
 不要在此文件中填写任何密钥值。

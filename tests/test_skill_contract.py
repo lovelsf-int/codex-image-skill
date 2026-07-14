@@ -55,6 +55,10 @@ ENV_ROUTE_CONTRACT_ZH = (
     "实时环境变量路由必须同时提供有效 URL 和密钥。使用 `--dry-run` 时必须提供"
     "有效 URL，但不要求提供密钥。"
 )
+MCP_SECTION_EN = "## Danko MCP Image Tools (Recommended)"
+MCP_SECTION_ZH = "## Danko MCP 图像工具（推荐）"
+LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
+LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
 
 
 def parse_yaml_frontmatter(document: str) -> dict[str, str]:
@@ -73,7 +77,70 @@ def parse_yaml_frontmatter(document: str) -> dict[str, str]:
     raise ValueError("SKILL.md YAML frontmatter is not closed")
 
 
+def section_after(document: str, heading: str, next_heading: str | None = None) -> str:
+    start = document.index(heading)
+    if next_heading is None:
+        return document[start:]
+    end = document.index(next_heading, start)
+    return document[start:end]
+
+
 class SkillContractTests(unittest.TestCase):
+    def test_bilingual_danko_mcp_sections_match_the_documentation_contract(self) -> None:
+        chinese = README_ZH.read_text(encoding="utf-8")
+        english = README_EN.read_text(encoding="utf-8")
+        english_mcp = section_after(english, MCP_SECTION_EN, LEGACY_CLI_SECTION_EN)
+        chinese_mcp = section_after(chinese, MCP_SECTION_ZH)
+        english_legacy = section_after(english, LEGACY_CLI_SECTION_EN)
+        chinese_legacy = section_after(chinese, LEGACY_CLI_SECTION_ZH)
+
+        for term in (
+            "intended replacement path",
+            "Danko-specific",
+            "generate_danko_image",
+            "edit_danko_image",
+            "local image-to-image",
+            "https://dankotoken.com/v1",
+            "env_vars",
+            "DANKOTOKEN_API_KEY",
+            "DANKOTOKEN_BASE_URL",
+            "Restart Codex after persistent Windows environment-variable changes",
+            "explicitly set `DANKOTOKEN_BASE_URL` or modify\n"
+            "the source default endpoint",
+            "does not technically disable, remove,\n"
+            "or modify Codex's built-in tool",
+            "never falls back to `api.openai.com`",
+        ):
+            with self.subTest(language="en", term=term):
+                self.assertIn(term, english_mcp)
+
+        for term in (
+            "预期替代路径",
+            "Danko 专用",
+            "generate_danko_image",
+            "edit_danko_image",
+            "图生图",
+            "https://dankotoken.com/v1",
+            "env_vars",
+            "DANKOTOKEN_API_KEY",
+            "DANKOTOKEN_BASE_URL",
+            "修改持久 Windows 环境变量后必须重启 Codex",
+            "必须显式设置 `DANKOTOKEN_BASE_URL`，或修改源码中的默认端点",
+            "不会在技术上禁用、移除或修改 Codex 的内置工具",
+            "也不会回退到 `api.openai.com`",
+        ):
+            with self.subTest(language="zh-CN", term=term):
+                self.assertIn(term, chinese_mcp)
+
+        self.assertNotIn(MCP_SECTION_ZH, english)
+        self.assertNotIn(MCP_SECTION_EN, chinese)
+        self.assertIn("legacy, text-to-image-only path", english)
+        self.assertIn("仅文本生成图像的旧版路径", chinese)
+        self.assertNotIn("Image editing, masks, batch generation", english)
+        self.assertNotIn("本 Skill 不支持图片编辑", chinese)
+        self.assertIn("`--source auto` first uses the active Codex route.", english_legacy)
+        self.assertIn("`--source auto` 优先使用当前 Codex 路由。", chinese_legacy)
+
     def test_skill_describes_danko_mcp_tools_and_security_policy(self) -> None:
         skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("generate_danko_image", skill)
@@ -187,14 +254,14 @@ class SkillContractTests(unittest.TestCase):
             "## 适用范围",
             "## 使用要求",
             "## 安装",
-            "## 默认行为：跟随 Codex",
-            "## Codex Home 选择",
-            "## 标准 Codex 提供商示例",
-            "## CC Switch 兼容性",
-            "## 显式环境变量回退",
-            "## 命令行示例",
-            "## 安全与输出契约",
-            "## 提供商兼容性",
+            LEGACY_CLI_SECTION_ZH,
+            "### Codex Home 选择",
+            "### 标准 Codex 提供商示例",
+            "### CC Switch 兼容性",
+            "### 显式环境变量回退",
+            "### 命令行示例",
+            "### 安全与输出契约",
+            "### 提供商兼容性",
             "## 测试与兼容矩阵",
         ):
             with self.subTest(language="zh-CN", heading=heading):
@@ -204,14 +271,14 @@ class SkillContractTests(unittest.TestCase):
             "## Scope",
             "## Requirements",
             "## Installation",
-            "## Default Behavior: Follow Codex",
-            "## Codex Home Selection",
-            "## Standard Codex Provider Example",
-            "## CC Switch Compatibility",
-            "## Explicit Environment Fallback",
-            "## CLI Examples",
-            "## Security and Output Contract",
-            "## Provider Compatibility",
+            LEGACY_CLI_SECTION_EN,
+            "### Codex Home Selection",
+            "### Standard Codex Provider Example",
+            "### CC Switch Compatibility",
+            "### Explicit Environment Fallback",
+            "### CLI Examples",
+            "### Security and Output Contract",
+            "### Provider Compatibility",
             "## Testing and Compatibility Matrix",
         ):
             with self.subTest(language="en", heading=heading):
