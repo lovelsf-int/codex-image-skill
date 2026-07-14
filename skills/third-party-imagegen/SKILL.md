@@ -43,8 +43,8 @@ legacy workflow. It is not the default when the Danko MCP is available.
   domain from Codex. A different provider domain requires an explicit
   `DANKOTOKEN_BASE_URL` override or a source change to the default endpoint.
 - The selected convenience-first fallback validates that exact Danko host
-  before it may use the active provider auth command or the legacy
-  `auth.json.OPENAI_API_KEY`. A stale official API key can therefore be sent to
+  before it may use the active provider auth command or the legacy `auth.json.OPENAI_API_KEY`.
+  A stale official API key can therefore be sent to
   the confirmed DankoToken host. OAuth fields are never read.
 
 ## CLI Compatibility Fallback
@@ -53,6 +53,7 @@ legacy workflow. It is not the default when the Danko MCP is available.
   compatibility CLI. It is a legacy text-to-image-only path; it does not
   support image-to-image or image editing. Its available selector is
   `--source auto|codex|env` and it defaults to `--source auto`.
+- The legacy CLI requires provider support for `/v1/images/generations`.
 - `--source auto` follows the active Codex provider using live `CODEX_HOME`
   configuration (or `--codex-home PATH`). `--source codex` requires a usable
   Codex route; `--source env` is for the legacy explicit `OPENAI_API_KEY` and
@@ -75,6 +76,8 @@ legacy workflow. It is not the default when the Danko MCP is available.
    `output_path` when needed. Do not expose route or credential values.
 4. Report the written output path. Sanitized summaries must never include a
    key, prompt, config, OAuth data, or token value.
+
+Sanitized summary fields are exactly and only: `source`, `provider`, `credential_source`, `host`, `model`, `output`, `output_format`, `quality`, and `size`. `key`, `prompt`, `config`, OAuth data, and token values are never included.
 
 For CLI compatibility work, use `--dry-run` to validate routing and parameters
 without a network request. It does not construct an SDK client and never
