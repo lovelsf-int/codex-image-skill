@@ -1,9 +1,11 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -170,9 +172,225 @@ base_url = "not a url"
             with self.assertRaises(self.mod.RouteInvalid):
                 self.mod.resolve_codex_route(home, {}, dry_run=True)
 
+    def test_cc_switch_enhanced_mode_prefers_provider_token(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+experimental_bearer_token = "provider-secret"
+requires_openai_auth = true
+''',
+                {"tokens": {"access_token": "oauth-secret"}},
+            )
+            route = self.mod.resolve_codex_route(home, {}, dry_run=False)
+            self.assertEqual(route.api_key, "provider-secret")
+            self.assertEqual(
+                route.credential_source, "provider.experimental_bearer_token"
+            )
+            self.assertNotIn("oauth-secret", repr(route))
+
+    def test_cc_switch_legacy_mode_reads_only_auth_json_api_key(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+''',
+                {
+                    "OPENAI_API_KEY": "legacy-secret",
+                    "tokens": {"access_token": "oauth-secret"},
+                },
+            )
+            route = self.mod.resolve_codex_route(home, {}, dry_run=False)
+            self.assertEqual(route.api_key, "legacy-secret")
+            self.assertEqual(route.credential_source, "auth.json.OPENAI_API_KEY")
+
+    def test_proxy_managed_requires_loopback(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "http://127.0.0.1:15721/v1"
+experimental_bearer_token = "PROXY_MANAGED"
+''',
+            )
+            route = self.mod.resolve_codex_route(home, {}, dry_run=False)
+            self.assertEqual(route.base_url, "http://127.0.0.1:15721/v1/")
+
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+experimental_bearer_token = "PROXY_MANAGED"
+''',
+            )
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.resolve_codex_route(home, {}, dry_run=False)
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.resolve_codex_route(home, {}, dry_run=True)
+
+    def test_oauth_only_auth_json_is_not_an_api_key(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+''',
+                {"tokens": {"access_token": "oauth-secret"}},
+            )
+            with self.assertRaises(self.mod.RouteUnavailable):
+                self.mod.resolve_codex_route(home, {}, dry_run=False)
+
+    def test_provider_auth_command_uses_injected_runner(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+[model_providers.custom.auth]
+command = "credential-helper"
+args = ["--token"]
+timeout_ms = 1000
+''',
+            )
+            runner = Mock(return_value="command-secret")
+            route = self.mod.resolve_codex_route(
+                home, {}, dry_run=False, auth_command_runner=runner
+            )
+            self.assertEqual(route.api_key, "command-secret")
+            self.assertEqual(route.credential_source, "provider.auth.command")
+            runner.assert_called_once_with(
+                {
+                    "command": "credential-helper",
+                    "args": ["--token"],
+                    "timeout_ms": 1000,
+                }
+            )
+
+    def test_provider_token_does_not_run_auth_command(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+experimental_bearer_token = "provider-secret"
+[model_providers.custom.auth]
+command = "credential-helper"
+''',
+            )
+            runner = Mock()
+            route = self.mod.resolve_codex_route(
+                home, {}, dry_run=False, auth_command_runner=runner
+            )
+            self.assertEqual(route.api_key, "provider-secret")
+            runner.assert_not_called()
+
+    def test_provider_env_key_does_not_run_auth_command(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+env_key = "CUSTOM_API_KEY"
+[model_providers.custom.auth]
+command = "credential-helper"
+''',
+            )
+            runner = Mock()
+            route = self.mod.resolve_codex_route(
+                home,
+                {"CUSTOM_API_KEY": "environment-secret"},
+                dry_run=False,
+                auth_command_runner=runner,
+            )
+            self.assertEqual(route.api_key, "environment-secret")
+            self.assertEqual(route.credential_source, "provider.env_key")
+            runner.assert_not_called()
+
+    def test_top_level_token_precedes_legacy_auth_json_key(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+experimental_bearer_token = "top-level-secret"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+''',
+                {"OPENAI_API_KEY": "legacy-secret"},
+            )
+            route = self.mod.resolve_codex_route(home, {}, dry_run=False)
+            self.assertEqual(route.api_key, "top-level-secret")
+            self.assertEqual(route.credential_source, "experimental_bearer_token")
+
     def test_malformed_ipv6_url_is_invalid(self) -> None:
         with self.assertRaises(self.mod.RouteInvalid):
             self.mod.validate_base_url("https://[::1")
+
+
+class AuthCommandTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.mod = load_module()
+
+    def test_run_auth_command_returns_trimmed_stdout(self) -> None:
+        completed = Mock(returncode=0, stdout=" command-secret\n")
+        with patch.object(self.mod.subprocess, "run", return_value=completed) as run:
+            token = self.mod.run_auth_command(
+                {
+                    "command": "credential-helper",
+                    "args": ["--token"],
+                    "timeout_ms": 1000,
+                }
+            )
+        self.assertEqual(token, "command-secret")
+        run.assert_called_once()
+
+    def test_run_auth_command_rejects_timeout(self) -> None:
+        with patch.object(
+            self.mod.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(["credential-helper"], 1),
+        ):
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.run_auth_command({"command": "credential-helper"})
+
+    def test_run_auth_command_rejects_nonzero_exit(self) -> None:
+        completed = Mock(returncode=1, stdout="unused")
+        with patch.object(self.mod.subprocess, "run", return_value=completed):
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.run_auth_command({"command": "credential-helper"})
+
+    def test_run_auth_command_rejects_empty_stdout(self) -> None:
+        completed = Mock(returncode=0, stdout="  \n")
+        with patch.object(self.mod.subprocess, "run", return_value=completed):
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.run_auth_command({"command": "credential-helper"})
 
 
 class EnvironmentRouteTests(unittest.TestCase):

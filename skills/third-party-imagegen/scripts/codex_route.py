@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ipaddress
 import json
 from pathlib import Path
-from typing import Any, Callable, Mapping
+import subprocess
+from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import urlsplit
 
 try:
@@ -139,7 +141,33 @@ AuthCommandRunner = Callable[[Mapping[str, Any]], str]
 
 
 def run_auth_command(auth: Mapping[str, Any]) -> str:
-    raise RouteUnavailable("provider auth.command support is not available")
+    command = auth.get("command")
+    args = auth.get("args", [])
+    timeout_ms = auth.get("timeout_ms", 5000)
+    if not isinstance(command, str) or not command.strip():
+        raise RouteInvalid("provider auth.command is missing")
+    if not isinstance(args, Sequence) or isinstance(args, (str, bytes)):
+        raise RouteInvalid("provider auth.args must be an array")
+    if not all(isinstance(item, str) for item in args):
+        raise RouteInvalid("provider auth.args must contain only strings")
+    if not isinstance(timeout_ms, int) or timeout_ms <= 0:
+        raise RouteInvalid("provider auth.timeout_ms must be a positive integer")
+    try:
+        completed = subprocess.run(
+            [command, *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=timeout_ms / 1000,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RouteInvalid("provider auth command failed or timed out") from exc
+    token = completed.stdout.strip()
+    if completed.returncode != 0 or not token:
+        raise RouteInvalid("provider auth command returned no usable credential")
+    return token
 
 
 def provider_credential(
@@ -149,12 +177,47 @@ def provider_credential(
     env: Mapping[str, str],
     auth_command_runner: AuthCommandRunner,
 ) -> tuple[str, str]:
+    token = provider.get("experimental_bearer_token")
+    if isinstance(token, str) and token.strip():
+        return token.strip(), "provider.experimental_bearer_token"
+
     env_key = provider.get("env_key")
     if isinstance(env_key, str) and env_key.strip():
         value = env.get(env_key.strip(), "").strip()
         if value:
             return value, "provider.env_key"
+
+    auth = provider.get("auth")
+    if isinstance(auth, Mapping):
+        value = auth_command_runner(auth)
+        if value:
+            return value, "provider.auth.command"
+
+    top_level = config.get("experimental_bearer_token")
+    if isinstance(top_level, str) and top_level.strip():
+        return top_level.strip(), "experimental_bearer_token"
+
+    legacy = load_auth_api_key(auth_path)
+    if legacy:
+        return legacy, "auth.json.OPENAI_API_KEY"
+
     return "", "none"
+
+
+def is_loopback_host(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def validate_proxy_placeholder(api_key: str, host: str) -> None:
+    if api_key == PROXY_PLACEHOLDER and not is_loopback_host(host):
+        raise RouteInvalid(
+            "PROXY_MANAGED is only valid for a loopback CC Switch route"
+        )
 
 
 def resolve_codex_route(
@@ -177,6 +240,8 @@ def resolve_codex_route(
     if not api_key and not dry_run:
         raise RouteUnavailable("current Codex route has no usable API credential")
     host = urlsplit(base_url).hostname or ""
+    if api_key:
+        validate_proxy_placeholder(api_key, host)
     return ResolvedRoute(
         api_key=api_key,
         base_url=base_url,
