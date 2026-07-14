@@ -24,8 +24,8 @@ both workflows' scope.
 
 - Codex with personal Skills enabled
 - Python 3.10+
-- **Danko MCP:** either a forwarded `DANKOTOKEN_API_KEY` or a coherent active
-  Codex Danko route that accepts Bearer authentication and implements
+- **Danko MCP:** a forwarded `DANKOTOKEN_API_KEY`, or an explicitly opted-in
+  coherent active Codex Danko route that accepts Bearer authentication and implements
   `POST /v1/images/generations` and `POST /v1/images/edits`
 - **Legacy CLI:** an active provider that accepts Bearer authentication and
   implements `POST /v1/images/generations`
@@ -82,18 +82,20 @@ put a key value in this file.
 command = "python"
 args = ["/absolute/path/to/danko_imagegen_server.py"]
 cwd = "/absolute/path/to/your/workspace"
-env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]
+env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL", "DANKOTOKEN_ALLOW_CODEX_FALLBACK"]
 default_tools_approval_mode = "writes"
 ```
 
 Routing is environment-first. When `DANKOTOKEN_API_KEY` is forwarded to the
 MCP server, it uses an explicitly supplied `DANKOTOKEN_BASE_URL`, or the exact
-Danko fallback `https://dankotoken.com/v1`. Without that dedicated key, it
-accepts only one coherent active Codex route on the Danko host. It never
+Danko fallback `https://dankotoken.com/v1`. Without that dedicated key, set
+`DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` to opt in before it accepts one coherent
+active Codex route on the Danko host. Otherwise the MCP stops with a
+configuration error. It never
 auto-infers another provider or domain from a non-Danko Codex route, and it
 never falls back to `api.openai.com`.
 
-The selected convenience-first fallback performs exact Danko host validation
+The explicitly opted-in convenience-first fallback performs exact Danko host validation
 before it may use the active provider auth command or the legacy
 `auth.json.OPENAI_API_KEY`. This means a stale official API key can be sent to
 the confirmed DankoToken host. OAuth fields are never read.
@@ -108,6 +110,8 @@ the source default endpoint. The MCP does not infer a non-Danko Codex route.
 
 In Windows **Environment Variables**, add `DANKOTOKEN_API_KEY` for your user.
 Add `DANKOTOKEN_BASE_URL` only when you need to override the Danko default.
+Set `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` only when you intentionally allow the
+MCP to use the active Codex Danko credential after host validation.
 Restart Codex after persistent Windows environment-variable changes so the MCP
 server receives the updated values. The MCP configuration forwards these names;
 it does not contain secret values.

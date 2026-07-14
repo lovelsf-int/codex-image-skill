@@ -1,4 +1,5 @@
 import importlib.util
+import ast
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -158,6 +159,40 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn("intended replacement path for built-in image_gen", instructions)
         self.assertNotIn("built-in image_gen is disabled", instructions)
+
+    def test_stdio_runner_uses_mcp_stdio_transport(self) -> None:
+        original_run = self.mod.mcp.run
+        calls = []
+        self.mod.mcp.run = lambda **kwargs: calls.append(kwargs)
+        try:
+            self.mod.run_stdio()
+        finally:
+            self.mod.mcp.run = original_run
+
+        self.assertEqual([{"transport": "stdio"}], calls)
+
+    def test_registered_tools_are_exactly_the_danko_pair(self) -> None:
+        module = ast.parse(SERVER.read_text(encoding="utf-8"), filename=str(SERVER))
+        registered = set()
+        for node in module.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for decorator in node.decorator_list:
+                if not isinstance(decorator, ast.Call):
+                    continue
+                if not isinstance(decorator.func, ast.Attribute):
+                    continue
+                if not (
+                    isinstance(decorator.func.value, ast.Name)
+                    and decorator.func.value.id == "mcp"
+                    and decorator.func.attr == "tool"
+                ):
+                    continue
+                for keyword in decorator.keywords:
+                    if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
+                        registered.add(keyword.value.value)
+
+        self.assertEqual({"generate_danko_image", "edit_danko_image"}, registered)
 
 
 if __name__ == "__main__":

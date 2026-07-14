@@ -125,6 +125,12 @@ def resolve_danko_route(
             codex_home=None,
         )
 
+    if env.get("DANKOTOKEN_ALLOW_CODEX_FALLBACK", "").strip() != "1":
+        raise DankoImageError(
+            "configure DANKOTOKEN_API_KEY or set "
+            "DANKOTOKEN_ALLOW_CODEX_FALLBACK=1"
+        )
+
     home = codex_home if codex_home is not None else resolve_codex_home(None, env)
     try:
         config = load_toml(home / "config.toml")

@@ -176,5 +176,10 @@ def edit_danko_image_tool(
     )
 
 
-if __name__ == "__main__":
+def run_stdio() -> None:
+    """Start the MCP server on its standard input/output transport."""
     mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    run_stdio()

@@ -19,7 +19,7 @@
 
 - 已启用个人 Skills 的 Codex
 - Python 3.10+
-- **Danko MCP：** 已转发的 `DANKOTOKEN_API_KEY`，或一条完整、活动的 Danko Codex 路由；它必须支持
+- **Danko MCP：** 已转发的 `DANKOTOKEN_API_KEY`，或在显式授权后的一条完整、活动的 Danko Codex 路由；它必须支持
   Bearer 身份验证、`POST /v1/images/generations` 和 `POST /v1/images/edits`
 - **旧版 CLI：** 当前提供商支持 Bearer 身份验证并实现 `POST /v1/images/generations`
 - 当前账号能够使用请求的 `gpt-image-*` 模型
@@ -69,16 +69,16 @@ cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 command = "python"
 args = ["/absolute/path/to/danko_imagegen_server.py"]
 cwd = "/absolute/path/to/your/workspace"
-env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]
+env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL", "DANKOTOKEN_ALLOW_CODEX_FALLBACK"]
 default_tools_approval_mode = "writes"
 ```
 
 路由遵循环境变量优先原则。转发 `DANKOTOKEN_API_KEY` 后，MCP 服务器只使用显式设置的
-`DANKOTOKEN_BASE_URL`，或精确的 Danko 回退地址 `https://dankotoken.com/v1`。没有专用密钥时，
-它只接受一条完整、当前活动的 Danko Codex 路由；绝不会从非 Danko Codex 提供商路由自动推断其他域名，
+`DANKOTOKEN_BASE_URL`，或精确的 Danko 回退地址 `https://dankotoken.com/v1`。没有专用密钥时，必须设置
+`DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` 才会显式授权它接受一条完整、当前活动的 Danko Codex 路由；否则 MCP 会停止并报告配置错误。它绝不会从非 Danko Codex 提供商路由自动推断其他域名，
 也不会回退到 `api.openai.com`。
 
-所选的便利性优先回退只会在精确验证 Danko 主机后，使用活动提供商的提供商身份验证命令或
+显式授权后的便利性优先回退只会在精确验证 Danko 主机后，使用活动提供商的提供商身份验证命令或
 旧式 `auth.json.OPENAI_API_KEY`。因此，过期的官方 API 密钥可能被发送到已确认的 DankoToken 主机。
 永不读取 OAuth 字段。
 
@@ -91,7 +91,8 @@ default_tools_approval_mode = "writes"
 ### Windows 持久环境变量
 
 在 Windows 的“环境变量”界面中，为当前用户添加 `DANKOTOKEN_API_KEY`。仅在需要覆盖 Danko 默认端点时添加
-`DANKOTOKEN_BASE_URL`。修改持久 Windows 环境变量后必须重启 Codex，MCP 服务器才能收到更新后的值。
+`DANKOTOKEN_BASE_URL`。只有在明确允许 MCP 在主机验证后使用活动 Codex Danko 凭据时，才设置
+`DANKOTOKEN_ALLOW_CODEX_FALLBACK=1`。修改持久 Windows 环境变量后必须重启 Codex，MCP 服务器才能收到更新后的值。
 MCP 配置只转发变量名，不包含密钥值。
 
 ### MCP 工具示例

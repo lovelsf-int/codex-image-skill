@@ -59,7 +59,10 @@ MCP_SECTION_EN = "## Danko MCP Image Tools (Recommended)"
 MCP_SECTION_ZH = "## Danko MCP 图像工具（推荐）"
 MCP_CONFIGURATION_END_EN = "### MCP Tool Examples"
 MCP_CONFIGURATION_END_ZH = "### MCP 工具示例"
-MCP_ENV_VARS_TOML = 'env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]'
+MCP_ENV_VARS_TOML = (
+    'env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL", '
+    '"DANKOTOKEN_ALLOW_CODEX_FALLBACK"]'
+)
 MCP_DEFAULT_OUTPUT = "output/danko-imagegen/generated.<format>"
 LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
 LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
@@ -112,6 +115,7 @@ class SkillContractTests(unittest.TestCase):
             "env_vars",
             "DANKOTOKEN_API_KEY",
             "DANKOTOKEN_BASE_URL",
+            "DANKOTOKEN_ALLOW_CODEX_FALLBACK=1",
             "Restart Codex after persistent Windows environment-variable changes",
             "explicitly set `DANKOTOKEN_BASE_URL` or modify\n"
             "the source default endpoint",
@@ -138,6 +142,7 @@ class SkillContractTests(unittest.TestCase):
             "env_vars",
             "DANKOTOKEN_API_KEY",
             "DANKOTOKEN_BASE_URL",
+            "DANKOTOKEN_ALLOW_CODEX_FALLBACK=1",
             "修改持久 Windows 环境变量后必须重启 Codex",
             "必须显式设置 `DANKOTOKEN_BASE_URL`，或修改源码中的默认端点",
             "不会在技术上禁用、移除或修改 Codex 的内置工具",
@@ -176,6 +181,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("generate_danko_image", skill)
         self.assertIn("edit_danko_image", skill)
         self.assertIn("DANKOTOKEN_API_KEY", skill)
+        self.assertIn("DANKOTOKEN_ALLOW_CODEX_FALLBACK=1", skill)
         self.assertIn("api.openai.com", skill)
         self.assertIn("convenience-first fallback", skill)
         self.assertIn("provider auth command", skill)

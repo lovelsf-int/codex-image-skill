@@ -60,6 +60,18 @@ class RouteTests(unittest.TestCase):
         self.assertEqual("dedicated-secret", route.api_key)
         self.assertEqual("https://dankotoken.com/v1/", route.base_url)
 
+    def test_codex_fallback_requires_explicit_opt_in_before_resolution(self) -> None:
+        with patch.object(
+            self.mod,
+            "load_toml",
+            side_effect=AssertionError("Codex route resolution must not run"),
+        ):
+            with self.assertRaises(self.mod.DankoImageError) as raised:
+                self.mod.resolve_danko_route({}, Path("codex"))
+
+        self.assertIn("DANKOTOKEN_API_KEY", str(raised.exception))
+        self.assertIn("DANKOTOKEN_ALLOW_CODEX_FALLBACK=1", str(raised.exception))
+
     def test_codex_fallback_accepts_only_dankotoken_host(self) -> None:
         danko_home = Path("danko-codex")
         non_danko_home = Path("other-codex")
@@ -87,10 +99,14 @@ class RouteTests(unittest.TestCase):
             return_value=("codex-secret", "provider.env_key"),
         ) as credential:
             self.assertEqual(
-                "codex", self.mod.resolve_danko_route({}, danko_home).source
+                "codex", self.mod.resolve_danko_route(
+                    {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"}, danko_home
+                ).source
             )
             with self.assertRaises(self.mod.DankoImageError):
-                self.mod.resolve_danko_route({}, non_danko_home)
+                self.mod.resolve_danko_route(
+                    {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"}, non_danko_home
+                )
         credential.assert_called_once()
 
     def test_codex_fallback_accepts_www_dankotoken_host(self) -> None:
@@ -115,7 +131,9 @@ class RouteTests(unittest.TestCase):
             "provider_credential",
             return_value=("codex-secret", "provider.env_key"),
         ):
-            route = self.mod.resolve_danko_route({}, home)
+            route = self.mod.resolve_danko_route(
+                {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"}, home
+            )
 
         self.assertEqual("www.dankotoken.com", route.host)
         self.assertEqual("codex", route.source)
@@ -142,7 +160,9 @@ class RouteTests(unittest.TestCase):
             "run_auth_command",
             return_value="command-api-key",
         ) as command_runner:
-            route = self.mod.resolve_danko_route({}, home)
+            route = self.mod.resolve_danko_route(
+                {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"}, home
+            )
 
         self.assertEqual("command-api-key", route.api_key)
         self.assertEqual("provider.auth.command", route.credential_source)
@@ -172,7 +192,9 @@ class RouteTests(unittest.TestCase):
                 "load_toml",
                 return_value=config,
             ):
-                route = self.mod.resolve_danko_route({}, home)
+                route = self.mod.resolve_danko_route(
+                    {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"}, home
+                )
 
         self.assertEqual("legacy-api-key", route.api_key)
         self.assertEqual("auth.json.OPENAI_API_KEY", route.credential_source)
@@ -198,7 +220,10 @@ class RouteTests(unittest.TestCase):
             side_effect=AssertionError("credential resolution must not run"),
         ) as credential:
             with self.assertRaises(self.mod.DankoImageError):
-                self.mod.resolve_danko_route({}, Path("non-danko-codex"))
+                self.mod.resolve_danko_route(
+                    {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"},
+                    Path("non-danko-codex"),
+                )
         credential.assert_not_called()
 
     def test_codex_route_errors_are_secret_free(self) -> None:
@@ -208,7 +233,9 @@ class RouteTests(unittest.TestCase):
             side_effect=self.mod.RouteError("route failed: secret-value"),
         ):
             with self.assertRaises(self.mod.DankoImageError) as raised:
-                self.mod.resolve_danko_route({}, Path("codex"))
+                self.mod.resolve_danko_route(
+                    {"DANKOTOKEN_ALLOW_CODEX_FALLBACK": "1"}, Path("codex")
+                )
         self.assertNotIn("secret-value", str(raised.exception))
 
 

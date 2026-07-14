@@ -30,13 +30,16 @@ legacy workflow. It is not the default when the Danko MCP is available.
   `output_format`, and `output_path`; editing also accepts `input_image_path`.
 - Secrets come only from forwarded `DANKOTOKEN_API_KEY` and optional
   `DANKOTOKEN_BASE_URL` environment variables, or from one coherent active
-  Codex Danko route. Never request, print, or place credentials in chat. Do not
+  Codex Danko route only after `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` is explicitly
+  forwarded. Never request, print, or place credentials in chat. Do not
   use OAuth tokens or read CC Switch database contents.
 - Environment routing has priority: when `DANKOTOKEN_API_KEY` is present, use
   `DANKOTOKEN_BASE_URL` only when explicitly set, otherwise use the fixed
   default `https://dankotoken.com/v1`. Never fall back to `api.openai.com`.
-- Without a forwarded dedicated key, use only an active Codex route whose host
-  is `dankotoken.com` or `www.dankotoken.com`. Never infer another provider or
+- Without a forwarded dedicated key, stop unless
+  `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` is set. With that explicit opt-in, use
+  only an active Codex route whose host is `dankotoken.com` or
+  `www.dankotoken.com`. Never infer another provider or
   domain from Codex. A different provider domain requires an explicit
   `DANKOTOKEN_BASE_URL` override or a source change to the default endpoint.
 - The selected convenience-first fallback validates that exact Danko host
