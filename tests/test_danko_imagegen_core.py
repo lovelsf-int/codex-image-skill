@@ -65,40 +65,91 @@ class RouteTests(unittest.TestCase):
     def test_codex_fallback_accepts_only_dankotoken_host(self) -> None:
         danko_home = Path("danko-codex")
         non_danko_home = Path("other-codex")
-        danko_route = self.mod.ResolvedRoute(
-            api_key="codex-secret",
-            base_url="https://dankotoken.com/v1/",
-            host="dankotoken.com",
-            source="codex",
-            provider_id="dankotoken",
-            credential_source="provider.env_key",
-            codex_home=danko_home,
-        )
-        other_route = self.mod.ResolvedRoute(
-            api_key="other-secret",
-            base_url="https://other.example/v1/",
-            host="other.example",
-            source="codex",
-            provider_id="other",
-            credential_source="provider.env_key",
-            codex_home=non_danko_home,
-        )
+        config = {"model_provider": "dankotoken"}
+        provider = {"env_key": "DANKOTOKEN_API_KEY"}
 
         with patch.object(
             self.mod,
-            "resolve_route",
-            side_effect=[danko_route, other_route],
-        ):
+            "load_toml",
+            return_value=config,
+        ), patch.object(
+            self.mod,
+            "active_provider",
+            return_value=("dankotoken", provider),
+        ), patch.object(
+            self.mod,
+            "resolve_codex_base_url",
+            side_effect=[
+                "https://dankotoken.com/v1/",
+                "https://other.example/v1/",
+            ],
+        ), patch.object(
+            self.mod,
+            "provider_credential",
+            return_value=("codex-secret", "provider.env_key"),
+        ) as credential:
             self.assertEqual(
                 "codex", self.mod.resolve_danko_route({}, danko_home).source
             )
             with self.assertRaises(self.mod.DankoImageError):
                 self.mod.resolve_danko_route({}, non_danko_home)
+        credential.assert_called_once()
+
+    def test_codex_fallback_accepts_www_dankotoken_host(self) -> None:
+        home = Path("danko-codex")
+        config = {"model_provider": "dankotoken"}
+        provider = {"env_key": "DANKOTOKEN_API_KEY"}
+
+        with patch.object(
+            self.mod,
+            "load_toml",
+            return_value=config,
+        ), patch.object(
+            self.mod,
+            "active_provider",
+            return_value=("dankotoken", provider),
+        ), patch.object(
+            self.mod,
+            "resolve_codex_base_url",
+            return_value="https://www.dankotoken.com/v1/",
+        ), patch.object(
+            self.mod,
+            "provider_credential",
+            return_value=("codex-secret", "provider.env_key"),
+        ):
+            route = self.mod.resolve_danko_route({}, home)
+
+        self.assertEqual("www.dankotoken.com", route.host)
+        self.assertEqual("codex", route.source)
+
+    def test_non_danko_route_never_resolves_auth_command_or_auth_json(self) -> None:
+        config = {
+            "model_provider": "other",
+            "model_providers": {
+                "other": {
+                    "base_url": "https://other.example/v1/",
+                    "auth": {"command": "must-not-run"},
+                }
+            },
+        }
+
+        with patch.object(
+            self.mod,
+            "load_toml",
+            return_value=config,
+        ), patch.object(
+            self.mod,
+            "provider_credential",
+            side_effect=AssertionError("credential resolution must not run"),
+        ) as credential:
+            with self.assertRaises(self.mod.DankoImageError):
+                self.mod.resolve_danko_route({}, Path("non-danko-codex"))
+        credential.assert_not_called()
 
     def test_codex_route_errors_are_secret_free(self) -> None:
         with patch.object(
             self.mod,
-            "resolve_route",
+            "load_toml",
             side_effect=self.mod.RouteError("route failed: secret-value"),
         ):
             with self.assertRaises(self.mod.DankoImageError) as raised:
@@ -180,6 +231,14 @@ class ImageOperationTests(unittest.TestCase):
             workspace = Path(directory)
             with self.assertRaises(self.mod.DankoImageError):
                 self.mod.validate_input_image(Path("C:/outside.png"), workspace)
+
+    def test_edit_rejects_unsupported_input_extension(self) -> None:
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            source_gif = workspace / "source.gif"
+            source_gif.write_bytes(PNG_BYTES)
+            with self.assertRaises(self.mod.DankoImageError):
+                self.mod.validate_input_image(source_gif, workspace)
 
     def test_output_collision_is_rejected(self) -> None:
         response = SimpleNamespace(

@@ -9,25 +9,36 @@ try:
     from ..scripts.codex_route import (
         ResolvedRoute,
         RouteError,
+        active_provider,
+        load_toml,
+        provider_credential,
         resolve_codex_home,
-        resolve_route,
+        resolve_codex_base_url,
+        run_auth_command,
         validate_base_url,
+        validate_proxy_placeholder,
     )
     from ..scripts.generate_image import ResponseError, atomic_write, decode_first_image
 except ImportError:
     from codex_route import (
         ResolvedRoute,
         RouteError,
+        active_provider,
+        load_toml,
+        provider_credential,
         resolve_codex_home,
-        resolve_route,
+        resolve_codex_base_url,
+        run_auth_command,
         validate_base_url,
+        validate_proxy_placeholder,
     )
     from generate_image import ResponseError, atomic_write, decode_first_image
 
 
 DEFAULT_DANKO_BASE_URL = "https://dankotoken.com/v1/"
-DANKO_HOST = "dankotoken.com"
+DANKO_HOSTS = frozenset({"dankotoken.com", "www.dankotoken.com"})
 DEFAULT_OUTPUT_NAME = "generated.png"
+SUPPORTED_EDIT_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 
 
 class DankoImageError(RuntimeError):
@@ -90,14 +101,36 @@ def resolve_danko_route(
 
     home = codex_home if codex_home is not None else resolve_codex_home(None, env)
     try:
-        route = resolve_route(
-            "codex", codex_home=home, env=env, dry_run=False
-        )
+        config = load_toml(home / "config.toml")
+        provider_id, provider = active_provider(config)
+        base_url = resolve_codex_base_url(config, provider_id, provider)
     except RouteError:
         raise DankoImageError("Danko image route could not be resolved") from None
-    if route.host.lower() != DANKO_HOST:
+    host = (urlsplit(base_url).hostname or "").lower()
+    if host not in DANKO_HOSTS:
         raise DankoImageError("Codex image route must use the DankoToken host")
-    return route
+    try:
+        api_key, credential_source = provider_credential(
+            config,
+            provider,
+            home / "auth.json",
+            env,
+            run_auth_command,
+        )
+        if not api_key:
+            raise RouteError("Codex route has no usable API credential")
+        validate_proxy_placeholder(api_key, host)
+    except RouteError:
+        raise DankoImageError("Danko image route could not be resolved") from None
+    return ResolvedRoute(
+        api_key=api_key,
+        base_url=base_url,
+        host=host,
+        source="codex",
+        provider_id=provider_id,
+        credential_source=credential_source,
+        codex_home=home,
+    )
 
 
 def _resolve_workspace(workspace: Path) -> Path:
@@ -124,6 +157,8 @@ def validate_input_image(input_image_path: Path, workspace: Path) -> Path:
     image = _resolve_within_workspace(input_image_path, resolved_workspace)
     if not image.is_file():
         raise DankoImageError("input image file is unavailable")
+    if image.suffix.lower() not in SUPPORTED_EDIT_SUFFIXES:
+        raise DankoImageError("input image must be a PNG, JPEG, or WebP file")
     return image
 
 
