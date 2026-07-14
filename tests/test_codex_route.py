@@ -138,7 +138,6 @@ name = "Custom"
     def test_invalid_utf8_toml_is_invalid_not_unavailable(self) -> None:
         with TemporaryDirectory() as directory:
             home = Path(directory)
-            home.mkdir(parents=True)
             (home / "config.toml").write_bytes(b"\xff")
             with self.assertRaises(self.mod.RouteInvalid):
                 self.mod.resolve_codex_route(home, {}, dry_run=True)
