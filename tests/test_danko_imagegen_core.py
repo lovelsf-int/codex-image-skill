@@ -253,6 +253,34 @@ class ImageOperationTests(unittest.TestCase):
                 **self.request.to_payload()
             )
 
+    def test_generate_rejects_empty_prompt_before_constructing_client(self) -> None:
+        client_factory = MagicMock()
+
+        with TemporaryDirectory() as directory:
+            with self.assertRaises(self.mod.DankoImageError):
+                self.mod.generate_image(
+                    self.mod.ImageRequest(prompt=" "),
+                    self.route,
+                    client_factory,
+                    Path(directory),
+                )
+
+        client_factory.assert_not_called()
+
+    def test_generate_rejects_invalid_model_before_constructing_client(self) -> None:
+        client_factory = MagicMock()
+
+        with TemporaryDirectory() as directory:
+            with self.assertRaises(self.mod.DankoImageError):
+                self.mod.generate_image(
+                    self.mod.ImageRequest(prompt="A small dog", model="other-model"),
+                    self.route,
+                    client_factory,
+                    Path(directory),
+                )
+
+        client_factory.assert_not_called()
+
     def test_edit_passes_local_image_to_images_edit(self) -> None:
         response = SimpleNamespace(
             data=[SimpleNamespace(b64_json=base64.b64encode(PNG_BYTES).decode("ascii"))]
@@ -283,6 +311,42 @@ class ImageOperationTests(unittest.TestCase):
                     if key != "image"
                 },
             )
+
+    def test_edit_rejects_empty_prompt_before_constructing_client(self) -> None:
+        client_factory = MagicMock()
+
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            source_png = workspace / "source.png"
+            source_png.write_bytes(PNG_BYTES)
+            with self.assertRaises(self.mod.DankoImageError):
+                self.mod.edit_image(
+                    self.mod.ImageRequest(prompt=" "),
+                    source_png,
+                    self.route,
+                    client_factory,
+                    workspace,
+                )
+
+        client_factory.assert_not_called()
+
+    def test_edit_rejects_invalid_model_before_constructing_client(self) -> None:
+        client_factory = MagicMock()
+
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            source_png = workspace / "source.png"
+            source_png.write_bytes(PNG_BYTES)
+            with self.assertRaises(self.mod.DankoImageError):
+                self.mod.edit_image(
+                    self.mod.ImageRequest(prompt="A small dog", model="other-model"),
+                    source_png,
+                    self.route,
+                    client_factory,
+                    workspace,
+                )
+
+        client_factory.assert_not_called()
 
     def test_edit_rejects_path_outside_workspace(self) -> None:
         with TemporaryDirectory() as directory:

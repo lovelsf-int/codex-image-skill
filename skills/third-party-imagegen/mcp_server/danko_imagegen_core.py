@@ -208,8 +208,9 @@ def generate_image(
     workspace: Path,
     output_path: Path | None = None,
 ) -> GeneratedImage:
+    payload = request.to_payload()
     try:
-        response = client_factory(route).images.generate(**request.to_payload())
+        response = client_factory(route).images.generate(**payload)
     except DankoImageError:
         raise
     except Exception as exc:
@@ -228,10 +229,11 @@ def edit_image(
     output_path: Path | None = None,
 ) -> GeneratedImage:
     image = validate_input_image(input_image_path, workspace)
+    payload = request.to_payload()
     try:
         with image.open("rb") as handle:
             response = client_factory(route).images.edit(
-                image=handle, **request.to_payload()
+                image=handle, **payload
             )
     except DankoImageError:
         raise

@@ -46,7 +46,13 @@ class ServerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.mod = load_module()
 
-    def _fake_core(self, *, route_error: Exception | None = None):
+    def _fake_core(
+        self,
+        *,
+        route_error: Exception | None = None,
+        generate_error: Exception | None = None,
+        edit_error: Exception | None = None,
+    ):
         route = SimpleNamespace(
             api_key="route-secret",
             base_url="https://dankotoken.com/v1/",
@@ -67,12 +73,22 @@ class ServerTests(unittest.TestCase):
                 raise route_error
             return route
 
+        def generate_image(*args, **kwargs):
+            if generate_error is not None:
+                raise generate_error
+            return result
+
+        def edit_image(*args, **kwargs):
+            if edit_error is not None:
+                raise edit_error
+            return result
+
         return SimpleNamespace(
             DankoImageError=FakeDankoImageError,
             ImageRequest=FakeImageRequest,
             resolve_danko_route=resolve_danko_route,
-            generate_image=lambda *args, **kwargs: result,
-            edit_image=lambda *args, **kwargs: result,
+            generate_image=generate_image,
+            edit_image=edit_image,
         )
 
     def test_generate_tool_returns_image_and_sanitized_text(self) -> None:
@@ -101,6 +117,32 @@ class ServerTests(unittest.TestCase):
 
         self.assertIn("route", str(raised.exception).lower())
         self.assertNotIn("route-secret", str(raised.exception))
+
+    def test_generate_provider_error_is_secret_free(self) -> None:
+        fake_core = self._fake_core(
+            generate_error=FakeDankoImageError(
+                "provider response: token=provider-secret prompt=red dog"
+            )
+        )
+
+        with self.assertRaises(self.mod.ToolError) as raised:
+            self.mod.generate_danko_image("red dog", core=fake_core)
+
+        self.assertNotIn("provider-secret", str(raised.exception))
+        self.assertNotIn("red dog", str(raised.exception))
+
+    def test_edit_provider_error_is_secret_free(self) -> None:
+        fake_core = self._fake_core(
+            edit_error=FakeDankoImageError(
+                "provider response: token=provider-secret prompt=change fur"
+            )
+        )
+
+        with self.assertRaises(self.mod.ToolError) as raised:
+            self.mod.edit_danko_image("change fur", "source.png", core=fake_core)
+
+        self.assertNotIn("provider-secret", str(raised.exception))
+        self.assertNotIn("change fur", str(raised.exception))
 
     def test_instructions_prefer_danko_without_disabling_builtin_imagegen(self) -> None:
         instructions = self.mod.mcp.instructions.lower()
