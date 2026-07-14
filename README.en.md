@@ -34,8 +34,23 @@ both workflows' scope.
 
 ## Installation
 
-Clone this repository, install its Python dependencies, and copy the Skill into
-your Codex Skills directory.
+### Plugin installation (recommended)
+
+Clone this repository, then use Codex's Plugin installation flow to install the
+repository root as the `danko-imagegen` plugin. Codex reads the root
+`.codex-plugin/plugin.json` declaration and automatically registers the local
+MCP server declared in `.mcp.json`; do not copy the Skill into your Codex Skills
+directory for the normal setup path.
+
+Configure `DANKOTOKEN_API_KEY` outside this repository, for example in your
+user environment. Set `DANKOTOKEN_BASE_URL` only when you need to explicitly
+override the Danko endpoint. Set `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` only when
+you intentionally allow reuse of the active Danko Codex credential.
+
+### Python runtime dependencies
+
+Install the repository dependencies in the Python environment that Codex uses
+to run the local MCP server.
 
 ### Windows PowerShell
 
@@ -73,9 +88,13 @@ or modify Codex's built-in tool. The legacy CLI
 documented below remains a text-to-image-only compatibility fallback, not the
 default when the MCP is available.
 
-Add this secret-free MCP configuration to Codex, replacing the placeholder
-paths with local absolute paths. `env_vars` forwards variable names only; never
-put a key value in this file.
+### Compatibility/manual MCP TOML setup
+
+Plugin installation is the normal setup path. Use this manual MCP TOML
+compatibility option only when you cannot install the repository as a plugin.
+Add this secret-free configuration to Codex, replacing the placeholder paths
+with local absolute paths. `env_vars` forwards variable names only; never put a
+key value in this file.
 
 ```toml
 [mcp_servers.danko_imagegen]

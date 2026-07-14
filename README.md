@@ -27,7 +27,20 @@
 
 ## 安装
 
-克隆仓库后，安装 Python 依赖，并将 Skill 复制到 Codex Skills 目录。
+### 插件安装（推荐）
+
+克隆本仓库后，通过 Codex 的插件安装流程将仓库根目录安装为
+`danko-imagegen` 插件。Codex 会读取根目录的 `.codex-plugin/plugin.json`
+声明，并自动注册 `.mcp.json` 中声明的本地 MCP 服务器；正常安装路径无需将
+Skill 复制到 Codex Skills 目录。
+
+请在仓库外部配置 `DANKOTOKEN_API_KEY`，例如配置为用户环境变量。仅在需要显式
+覆盖 Danko 端点时设置 `DANKOTOKEN_BASE_URL`。只有在你有意允许复用活动的 Danko
+Codex 凭据时，才设置 `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1`。
+
+### Python 运行时依赖
+
+请在 Codex 用于运行本地 MCP 服务器的 Python 环境中安装本仓库依赖。
 
 ### Windows PowerShell
 
@@ -61,8 +74,11 @@ cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 `image_gen` 工具。它不会跟随任意活动的 Codex 提供商。这是工作流选择，不会在技术上禁用、移除或修改 Codex 的内置工具。
 下面的旧版 CLI 仍可用于仅文本生成图像的兼容性回退，但在 MCP 可用时不是默认路径。
 
-将下面的无密钥 MCP 配置加入 Codex，并将占位路径替换为本机绝对路径。`env_vars` 只转发环境变量名，
-不要在此文件中填写任何密钥值。
+### 兼容性/手动 MCP TOML 配置
+
+插件安装是正常的设置路径。仅在无法将本仓库安装为插件时，才使用此手动 MCP TOML
+兼容性选项。将下面的无密钥配置加入 Codex，并将占位路径替换为本机绝对路径。`env_vars`
+只转发环境变量名；不要在此文件中填写任何密钥值。
 
 ```toml
 [mcp_servers.danko_imagegen]

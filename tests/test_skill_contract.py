@@ -69,6 +69,10 @@ MCP_ENV_VARS_TOML = (
 MCP_DEFAULT_OUTPUT = "output/danko-imagegen/generated.<format>"
 LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
 LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
+PLUGIN_INSTALLATION_SECTION_EN = "### Plugin installation (recommended)"
+PLUGIN_INSTALLATION_SECTION_ZH = "### 插件安装（推荐）"
+MANUAL_MCP_SECTION_EN = "### Compatibility/manual MCP TOML setup"
+MANUAL_MCP_SECTION_ZH = "### 兼容性/手动 MCP TOML 配置"
 
 
 def parse_yaml_frontmatter(document: str) -> dict[str, str]:
@@ -223,6 +227,45 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn("本 Skill 不支持图片编辑", chinese)
         self.assertIn("`--source auto` first uses the active Codex route.", english_legacy)
         self.assertIn("`--source auto` 优先使用当前 Codex 路由。", chinese_legacy)
+
+    def test_bilingual_readmes_document_plugin_first_installation(self) -> None:
+        chinese = README_ZH.read_text(encoding="utf-8")
+        english = README_EN.read_text(encoding="utf-8")
+
+        for language, document, plugin_section, manual_section, automatic_registration in (
+            (
+                "en",
+                english,
+                PLUGIN_INSTALLATION_SECTION_EN,
+                MANUAL_MCP_SECTION_EN,
+                "automatically registers the local\nMCP server",
+            ),
+            (
+                "zh-CN",
+                chinese,
+                PLUGIN_INSTALLATION_SECTION_ZH,
+                MANUAL_MCP_SECTION_ZH,
+                "自动注册 `.mcp.json` 中声明的本地 MCP 服务器",
+            ),
+        ):
+            for term in (
+                "danko-imagegen",
+                ".codex-plugin/plugin.json",
+                ".mcp.json",
+                "DANKOTOKEN_API_KEY",
+                plugin_section,
+                manual_section,
+                automatic_registration,
+            ):
+                with self.subTest(language=language, term=term):
+                    self.assertIn(term, document)
+            with self.subTest(language=language, requirement="plugin-first"):
+                self.assertLess(document.index(plugin_section), document.index(manual_section))
+
+        self.assertIn(
+            "manual MCP TOML\ncompatibility option only", english
+        )
+        self.assertIn("手动 MCP TOML\n兼容性选项", chinese)
 
     def test_skill_describes_danko_mcp_tools_and_security_policy(self) -> None:
         skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
