@@ -132,6 +132,14 @@ name = "Custom"
             with self.assertRaises(self.mod.RouteInvalid):
                 self.mod.resolve_codex_route(home, {}, dry_run=True)
 
+    def test_invalid_utf8_toml_is_invalid_not_unavailable(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            home.mkdir(parents=True)
+            (home / "config.toml").write_bytes(b"\xff")
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.resolve_codex_route(home, {}, dry_run=True)
+
     def test_dry_run_allows_missing_credential_with_valid_url(self) -> None:
         with TemporaryDirectory() as directory:
             home = Path(directory)
@@ -161,6 +169,10 @@ base_url = "not a url"
             )
             with self.assertRaises(self.mod.RouteInvalid):
                 self.mod.resolve_codex_route(home, {}, dry_run=True)
+
+    def test_malformed_ipv6_url_is_invalid(self) -> None:
+        with self.assertRaises(self.mod.RouteInvalid):
+            self.mod.validate_base_url("https://[::1")
 
 
 class EnvironmentRouteTests(unittest.TestCase):

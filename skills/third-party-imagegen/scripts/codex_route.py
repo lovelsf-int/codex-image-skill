@@ -52,7 +52,7 @@ def load_toml(path: Path) -> dict[str, Any]:
             data = tomllib.load(handle)
     except FileNotFoundError as exc:
         raise RouteUnavailable("Codex config.toml was not found") from exc
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
         raise RouteInvalid("Codex config.toml could not be read or parsed") from exc
     if not isinstance(data, dict):
         raise RouteInvalid("Codex config.toml must contain a TOML table")
@@ -76,7 +76,10 @@ def validate_base_url(value: str | None) -> str:
     normalized = value.strip() if value else ""
     if not normalized:
         raise RouteUnavailable("image API base URL is required")
-    parsed = urlsplit(normalized)
+    try:
+        parsed = urlsplit(normalized)
+    except ValueError as exc:
+        raise RouteInvalid("image API base URL is malformed") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise RouteInvalid("image API base URL must be an absolute HTTP(S) URL")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
