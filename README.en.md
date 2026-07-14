@@ -96,8 +96,8 @@ auto-infers another provider or domain from a non-Danko Codex route, and it
 never falls back to `api.openai.com`.
 
 The explicitly opted-in convenience-first fallback performs exact Danko host validation
-before it may use the active provider auth command or the legacy
-`auth.json.OPENAI_API_KEY`. This means a stale official API key can be sent to
+before it may use the active provider auth command or the legacy `auth.json.OPENAI_API_KEY`.
+This means a stale official API key can be sent to
 the confirmed DankoToken host. OAuth fields are never read.
 
 When `output_path` is omitted, the default target is
