@@ -14,6 +14,7 @@
 - Dedicated credentials: `DANKOTOKEN_API_KEY` and optional `DANKOTOKEN_BASE_URL`.
 - Priority: dedicated complete route first; otherwise active Codex route only if hostname is exactly `dankotoken.com` or `www.dankotoken.com`.
 - Never mix a URL and key from different sources; never read OAuth fields or the CC Switch database; never fall back to `api.openai.com`.
+- Explicit user choice: after exact Danko host validation, Codex fallback may use the active provider's auth command and legacy `auth.json.OPENAI_API_KEY`; this convenience-first mode can send a stale official API key to the confirmed DankoToken host.
 - Defaults: `gpt-image-2`, `1024x1024`, `medium`, and `png`.
 - Text-to-image uses `/v1/images/generations`; image-to-image uses `/v1/images/edits` with multipart local files.
 - Image-to-image accepts only regular `.png`, `.jpg`, `.jpeg`, or `.webp` files inside the MCP working directory.
@@ -76,7 +77,7 @@ class GeneratedImage:
     output_format: str
 ```
 
-Dedicated keys use only `DANKOTOKEN_BASE_URL` or the Danko default. Without that key, call `resolve_route("codex", ...)`, require the exact Danko hostname, and convert failures to secret-free `DankoImageError`.
+Dedicated keys use only `DANKOTOKEN_BASE_URL` or the Danko default. Without that key, parse the active Codex provider URL, require the exact Danko hostname, then resolve the active provider credential using the existing order (including auth command and legacy API-key field) and convert failures to secret-free `DankoImageError`.
 
 - [ ] **Step 3: Write unexecuted fake-client generation, edit, and file-boundary tests**
 

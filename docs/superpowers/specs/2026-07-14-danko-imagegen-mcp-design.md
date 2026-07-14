@@ -50,9 +50,14 @@ working directory. Existing files are never overwritten silently.
    existing resolver.
 3. Accept the Codex fallback only when its parsed host is exactly
    `dankotoken.com` or `www.dankotoken.com`.
-4. Reject incomplete, unsafe, or non-DankoToken fallback routes. Never mix a
+4. After that host validation only, allow the existing Codex active-provider
+   credential order, including provider auth commands and the legacy
+   `auth.json.OPENAI_API_KEY` API-key field. This is an explicit
+   convenience-first user choice: a stale official API key may be sent to the
+   confirmed DankoToken host.
+5. Reject incomplete, unsafe, or non-DankoToken fallback routes. Never mix a
    Codex URL with a dedicated key or an environment URL with a Codex key.
-5. Never read OAuth fields (`tokens`, `access_token`, `refresh_token`), never
+6. Never read OAuth fields (`tokens`, `access_token`, `refresh_token`), never
    inspect the CC Switch database, and never fall back to `api.openai.com`.
 
 The server reads `DANKOTOKEN_API_KEY` from its inherited environment. Codex
