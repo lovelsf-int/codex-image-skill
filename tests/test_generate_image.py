@@ -184,6 +184,20 @@ class GenerationTests(unittest.TestCase):
             data=[SimpleNamespace(b64_json=base64.b64encode(raw).decode("ascii"))]
         )
         captured = {}
+        env = {
+            "OPENAI_API_KEY": "environment-api-key",
+            "OPENAI_BASE_URL": "https://environment.example/v1",
+        }
+        codex_home = Path("custom-codex-home")
+        route = self.mod.ResolvedRoute(
+            api_key="environment-api-key",
+            base_url="https://environment.example/v1/",
+            host="environment.example",
+            source="env",
+            provider_id=None,
+            credential_source="OPENAI_API_KEY",
+            codex_home=None,
+        )
 
         class Images:
             def generate(self, **payload):
@@ -197,21 +211,39 @@ class GenerationTests(unittest.TestCase):
             captured["route"] = route
             return Client()
 
+        def resolver(source, *, codex_home, env, dry_run):
+            captured["source"] = source
+            captured["codex_home"] = codex_home
+            captured["env"] = env
+            captured["dry_run"] = dry_run
+            return route
+
         with TemporaryDirectory() as directory:
             out = Path(directory) / "dog.png"
             args = self.mod.parse_args(
-                ["--prompt", "A small dog", "--source", "env", "--out", str(out)]
+                [
+                    "--prompt",
+                    "A small dog",
+                    "--source",
+                    "env",
+                    "--codex-home",
+                    str(codex_home),
+                    "--out",
+                    str(out),
+                ]
             )
             result = self.mod.run(
                 args,
-                env={
-                    "OPENAI_API_KEY": "environment-api-key",
-                    "OPENAI_BASE_URL": "https://environment.example/v1",
-                },
+                env=env,
+                route_resolver=resolver,
                 client_factory=factory,
             )
             self.assertEqual(result, out)
             self.assertEqual(out.read_bytes(), raw)
+            self.assertEqual(captured["source"], "env")
+            self.assertEqual(captured["codex_home"], codex_home)
+            self.assertIs(captured["env"], env)
+            self.assertFalse(captured["dry_run"])
             self.assertEqual(captured["route"].source, "env")
             self.assertEqual(
                 captured["route"].base_url, "https://environment.example/v1/"
@@ -239,21 +271,53 @@ class GenerationTests(unittest.TestCase):
             self.mod.decode_first_image(response)
 
     def test_dry_run_never_constructs_a_client(self) -> None:
+        env = {"OPENAI_BASE_URL": "https://token.example/v1"}
+        codex_home = Path("custom-codex-home")
+        route = self.mod.ResolvedRoute(
+            api_key="",
+            base_url="https://token.example/v1/",
+            host="token.example",
+            source="env",
+            provider_id=None,
+            credential_source="none",
+            codex_home=None,
+        )
+        captured = {}
         args = self.mod.parse_args(
-            ["--prompt", "A small dog", "--source", "env", "--dry-run"]
+            [
+                "--prompt",
+                "A small dog",
+                "--source",
+                "env",
+                "--codex-home",
+                str(codex_home),
+                "--dry-run",
+            ]
         )
 
         def forbidden_factory(route):
             raise AssertionError("client must not be constructed")
 
+        def resolver(source, *, codex_home, env, dry_run):
+            captured["source"] = source
+            captured["codex_home"] = codex_home
+            captured["env"] = env
+            captured["dry_run"] = dry_run
+            return route
+
         stream = io.StringIO()
         result = self.mod.run(
             args,
-            env={"OPENAI_BASE_URL": "https://token.example/v1"},
+            env=env,
+            route_resolver=resolver,
             client_factory=forbidden_factory,
             stdout=stream,
         )
         self.assertIsNone(result)
+        self.assertEqual(captured["source"], "env")
+        self.assertEqual(captured["codex_home"], codex_home)
+        self.assertIs(captured["env"], env)
+        self.assertTrue(captured["dry_run"])
         self.assertIn("token.example", stream.getvalue())
 
     def test_loopback_codex_route_404_reports_cc_switch_endpoint_guidance(self) -> None:
