@@ -54,7 +54,8 @@ def _resolve_route(core: Any) -> Any:
     except core.DankoImageError:
         raise ToolError(
             "Unable to resolve the Danko image route. Configure a DankoToken "
-            "credential or a DankoToken-hosted Codex route."
+            "credential, or set DANKOTOKEN_ALLOW_CODEX_FALLBACK=1 for a "
+            "DankoToken-hosted Codex route."
         ) from None
 
 
