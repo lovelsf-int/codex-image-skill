@@ -1,5 +1,7 @@
 # Codex API ImageGen Skill
 
+[English](README.en.md)
+
 Generate one image through an OpenAI-compatible image endpoint while following
 the active Codex provider by default. The Skill uses `gpt-image-2` unless a
 different `gpt-image-*` model is requested. It only uses the bundled API/CLI

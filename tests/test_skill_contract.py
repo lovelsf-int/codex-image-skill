@@ -6,6 +6,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills" / "third-party-imagegen"
 GENERATE_IMAGE = SKILL_DIR / "scripts" / "generate_image.py"
+README_EN = ROOT / "README.en.md"
 
 SANITIZED_SUMMARY_FIELDS = {
     "source",
@@ -133,6 +134,47 @@ class SkillContractTests(unittest.TestCase):
                 self.assertIn(SANITIZED_SUMMARY_CONTRACT, document)
         self.assertTrue((ROOT / "LICENSE").is_file())
         self.assertTrue((ROOT / ".github" / "workflows" / "test.yml").is_file())
+
+    def test_english_readme_matches_public_routing_contract(self) -> None:
+        self.assertTrue(README_EN.is_file())
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        english = README_EN.read_text(encoding="utf-8")
+        self.assertIn("[English](README.en.md)", readme)
+        self.assertIn("[简体中文](README.md)", english)
+        for term in (
+            "Python 3.10+",
+            "Windows PowerShell",
+            "macOS",
+            "Linux",
+            "--source auto|codex|env",
+            "CODEX_HOME",
+            "--codex-home",
+            "model_provider",
+            "env_key",
+            "experimental_bearer_token",
+            "auth.json.OPENAI_API_KEY",
+            "PROXY_MANAGED",
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "CC Switch",
+            "/v1/images/generations",
+            "DankoToken has no hardcoded priority",
+            "OAuth fields",
+            "tokens",
+            "access_token",
+            "refresh_token",
+            "CC Switch SQLite database",
+            "api.openai.com",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+            "gpt-image-2",
+            "data[].b64_json",
+            "GitHub Actions",
+        ):
+            with self.subTest(term=term):
+                self.assertIn(term, english)
+        self.assertIn(SANITIZED_SUMMARY_CONTRACT, english)
 
 
 if __name__ == "__main__":
