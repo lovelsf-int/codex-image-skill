@@ -219,6 +219,9 @@ default_tools_approval_mode = "writes"
 ```
 
 Document environment-first priority, exact Danko host fallback, restart after persistent Windows variable changes, and examples for both tools.
+Also state that another provider domain requires an explicit
+`DANKOTOKEN_BASE_URL` override or a source change to the default endpoint; it
+is never inferred from a non-Danko Codex provider.
 
 - [ ] **Step 4: Static check and commit**
 

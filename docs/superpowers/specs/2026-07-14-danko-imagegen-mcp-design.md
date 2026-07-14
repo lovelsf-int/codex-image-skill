@@ -64,6 +64,11 @@ The server reads `DANKOTOKEN_API_KEY` from its inherited environment. Codex
 MCP configuration should forward only named environment variables using
 `env_vars`; the repository and Skill must not contain secret values.
 
+The default endpoint is intentionally DankoToken-only. Users who need another
+domain must set `DANKOTOKEN_BASE_URL` explicitly or modify the source default;
+the MCP server does not silently treat another active Codex provider as
+DankoToken.
+
 ## Components
 
 - `mcp/danko_imagegen_server.py`: stdio MCP server and tool schemas.
