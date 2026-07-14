@@ -1,5 +1,6 @@
 import base64
 import importlib.util
+import json
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -121,6 +122,63 @@ class RouteTests(unittest.TestCase):
 
         self.assertEqual("www.dankotoken.com", route.host)
         self.assertEqual("codex", route.source)
+
+    def test_danko_route_allows_active_provider_auth_command(self) -> None:
+        home = Path("danko-codex")
+        auth = {"command": "danko-token-command"}
+        config = {
+            "model_provider": "dankotoken",
+            "model_providers": {
+                "dankotoken": {
+                    "base_url": "https://dankotoken.com/v1/",
+                    "auth": auth,
+                }
+            },
+        }
+
+        with patch.object(
+            self.mod,
+            "load_toml",
+            return_value=config,
+        ), patch.object(
+            self.mod,
+            "run_auth_command",
+            return_value="command-api-key",
+        ) as command_runner:
+            route = self.mod.resolve_danko_route({}, home)
+
+        self.assertEqual("command-api-key", route.api_key)
+        self.assertEqual("provider.auth.command", route.credential_source)
+        command_runner.assert_called_once_with(auth)
+
+    def test_danko_route_allows_legacy_auth_json_api_key(self) -> None:
+        config = {
+            "model_provider": "dankotoken",
+            "model_providers": {
+                "dankotoken": {"base_url": "https://dankotoken.com/v1/"}
+            },
+        }
+
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / "auth.json").write_text(
+                json.dumps(
+                    {
+                        "OPENAI_API_KEY": "legacy-api-key",
+                        "tokens": {"access_token": "must-not-be-used"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.object(
+                self.mod,
+                "load_toml",
+                return_value=config,
+            ):
+                route = self.mod.resolve_danko_route({}, home)
+
+        self.assertEqual("legacy-api-key", route.api_key)
+        self.assertEqual("auth.json.OPENAI_API_KEY", route.credential_source)
 
     def test_non_danko_route_never_resolves_auth_command_or_auth_json(self) -> None:
         config = {
