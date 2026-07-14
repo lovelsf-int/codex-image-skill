@@ -257,10 +257,13 @@ def resolve_env_route(
     api_key = env.get("OPENAI_API_KEY", "").strip()
     if not api_key and not dry_run:
         raise RouteUnavailable("OPENAI_API_KEY is required for env source")
+    host = urlsplit(base_url).hostname or ""
+    if api_key:
+        validate_proxy_placeholder(api_key, host)
     return ResolvedRoute(
         api_key=api_key,
         base_url=base_url,
-        host=urlsplit(base_url).hostname or "",
+        host=host,
         source="env",
         provider_id=None,
         credential_source="OPENAI_API_KEY" if api_key else "none",

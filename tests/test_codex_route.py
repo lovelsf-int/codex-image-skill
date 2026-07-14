@@ -472,6 +472,51 @@ class EnvironmentRouteTests(unittest.TestCase):
                     dry_run=False,
                 )
 
+    def test_proxy_managed_env_route_accepts_exact_loopback_hosts(self) -> None:
+        loopback_urls = (
+            "http://localhost:15721/v1",
+            "http://127.0.0.1:15721/v1",
+            "http://[::1]:15721/v1",
+        )
+        for base_url in loopback_urls:
+            with self.subTest(base_url=base_url):
+                route = self.mod.resolve_env_route(
+                    {
+                        "OPENAI_BASE_URL": base_url,
+                        "OPENAI_API_KEY": "PROXY_MANAGED",
+                    },
+                    dry_run=False,
+                )
+                self.assertEqual(route.api_key, "PROXY_MANAGED")
+
+    def test_proxy_managed_env_route_rejects_non_loopback_hosts(self) -> None:
+        rejected_urls = (
+            "https://relay.example/v1",
+            "http://127.0.0.2:15721/v1",
+        )
+        for base_url in rejected_urls:
+            for dry_run in (False, True):
+                with self.subTest(base_url=base_url, dry_run=dry_run):
+                    with self.assertRaises(self.mod.RouteInvalid):
+                        self.mod.resolve_env_route(
+                            {
+                                "OPENAI_BASE_URL": base_url,
+                                "OPENAI_API_KEY": "PROXY_MANAGED",
+                            },
+                            dry_run=dry_run,
+                        )
+
+    def test_normal_env_credential_preserves_remote_route(self) -> None:
+        route = self.mod.resolve_env_route(
+            {
+                "OPENAI_BASE_URL": "https://relay.example/v1",
+                "OPENAI_API_KEY": "environment-key",
+            },
+            dry_run=False,
+        )
+        self.assertEqual(route.host, "relay.example")
+        self.assertEqual(route.api_key, "environment-key")
+
 
 if __name__ == "__main__":
     unittest.main()
