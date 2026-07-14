@@ -57,6 +57,9 @@ ENV_ROUTE_CONTRACT_ZH = (
 )
 MCP_SECTION_EN = "## Danko MCP Image Tools (Recommended)"
 MCP_SECTION_ZH = "## Danko MCP 图像工具（推荐）"
+MCP_CONFIGURATION_END_EN = "### MCP Tool Examples"
+MCP_CONFIGURATION_END_ZH = "### MCP 工具示例"
+MCP_ENV_VARS_TOML = 'env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]'
 LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
 LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
 
@@ -89,8 +92,12 @@ class SkillContractTests(unittest.TestCase):
     def test_bilingual_danko_mcp_sections_match_the_documentation_contract(self) -> None:
         chinese = README_ZH.read_text(encoding="utf-8")
         english = README_EN.read_text(encoding="utf-8")
-        english_mcp = section_after(english, MCP_SECTION_EN, LEGACY_CLI_SECTION_EN)
-        chinese_mcp = section_after(chinese, MCP_SECTION_ZH)
+        english_mcp_configuration = section_after(
+            english, MCP_SECTION_EN, MCP_CONFIGURATION_END_EN
+        )
+        chinese_mcp_configuration = section_after(
+            chinese, MCP_SECTION_ZH, MCP_CONFIGURATION_END_ZH
+        )
         english_legacy = section_after(english, LEGACY_CLI_SECTION_EN)
         chinese_legacy = section_after(chinese, LEGACY_CLI_SECTION_ZH)
 
@@ -112,7 +119,7 @@ class SkillContractTests(unittest.TestCase):
             "never falls back to `api.openai.com`",
         ):
             with self.subTest(language="en", term=term):
-                self.assertIn(term, english_mcp)
+                self.assertIn(term, english_mcp_configuration)
 
         for term in (
             "预期替代路径",
@@ -130,8 +137,12 @@ class SkillContractTests(unittest.TestCase):
             "也不会回退到 `api.openai.com`",
         ):
             with self.subTest(language="zh-CN", term=term):
-                self.assertIn(term, chinese_mcp)
+                self.assertIn(term, chinese_mcp_configuration)
 
+        self.assertIn(MCP_ENV_VARS_TOML, english_mcp_configuration)
+        self.assertIn(MCP_ENV_VARS_TOML, chinese_mcp_configuration)
+        self.assertIn(MCP_CONFIGURATION_END_EN, english)
+        self.assertIn(MCP_CONFIGURATION_END_ZH, chinese)
         self.assertNotIn(MCP_SECTION_ZH, english)
         self.assertNotIn(MCP_SECTION_EN, chinese)
         self.assertIn("legacy, text-to-image-only path", english)
