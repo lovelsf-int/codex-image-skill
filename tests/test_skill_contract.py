@@ -1,9 +1,12 @@
 import ast
+import json
 from pathlib import Path
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_MANIFEST = ROOT / ".codex-plugin" / "plugin.json"
+MCP_CONFIGURATION = ROOT / ".mcp.json"
 SKILL_DIR = ROOT / "skills" / "third-party-imagegen"
 GENERATE_IMAGE = SKILL_DIR / "scripts" / "generate_image.py"
 README_ZH = ROOT / "README.md"
@@ -93,6 +96,51 @@ def section_after(document: str, heading: str, next_heading: str | None = None) 
 
 
 class SkillContractTests(unittest.TestCase):
+    def test_root_plugin_and_mcp_declarations_match_contract(self) -> None:
+        manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
+        mcp_configuration = json.loads(
+            MCP_CONFIGURATION.read_text(encoding="utf-8")
+        )
+
+        self.assertEqual("danko-imagegen", manifest["name"])
+        self.assertEqual("0.1.0", manifest["version"])
+        self.assertEqual("MIT", manifest["license"])
+        self.assertEqual("lovelsf-int", manifest["author"]["name"])
+        self.assertEqual(
+            "https://github.com/lovelsf-int/codex-image-skill",
+            manifest["homepage"],
+        )
+        self.assertEqual(
+            "https://github.com/lovelsf-int/codex-image-skill",
+            manifest["repository"],
+        )
+        self.assertEqual("./skills/", manifest["skills"])
+        self.assertEqual("./.mcp.json", manifest["mcpServers"])
+        self.assertEqual("Danko ImageGen", manifest["interface"]["displayName"])
+        self.assertEqual("Productivity", manifest["interface"]["category"])
+        self.assertEqual(
+            ["Interactive", "Write"], manifest["interface"]["capabilities"]
+        )
+        self.assertLessEqual(len(manifest["interface"]["defaultPrompt"]), 2)
+
+        servers = mcp_configuration["mcpServers"]
+        self.assertEqual({"danko-imagegen"}, set(servers))
+        self.assertEqual(
+            {
+                "command": "python",
+                "args": [
+                    "./skills/third-party-imagegen/mcp_server/danko_imagegen_server.py"
+                ],
+                "cwd": ".",
+                "env_vars": [
+                    "DANKOTOKEN_API_KEY",
+                    "DANKOTOKEN_BASE_URL",
+                    "DANKOTOKEN_ALLOW_CODEX_FALLBACK",
+                ],
+            },
+            servers["danko-imagegen"],
+        )
+
     def test_bilingual_danko_mcp_sections_match_the_documentation_contract(self) -> None:
         chinese = README_ZH.read_text(encoding="utf-8")
         english = README_EN.read_text(encoding="utf-8")

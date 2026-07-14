@@ -1,0 +1,36 @@
+{
+  "name": "danko-imagegen",
+  "version": "0.1.0",
+  "description": "Generate and edit images through the Danko ImageGen MCP server.",
+  "author": {
+    "name": "lovelsf-int",
+    "url": "https://github.com/lovelsf-int"
+  },
+  "homepage": "https://github.com/lovelsf-int/codex-image-skill",
+  "repository": "https://github.com/lovelsf-int/codex-image-skill",
+  "license": "MIT",
+  "keywords": [
+    "image generation",
+    "image editing",
+    "Danko",
+    "MCP"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Danko ImageGen",
+    "shortDescription": "Generate and edit images through Danko MCP",
+    "longDescription": "Use Danko ImageGen tools to generate and edit images through a local MCP server.",
+    "developerName": "lovelsf-int",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/lovelsf-int/codex-image-skill",
+    "defaultPrompt": [
+      "Generate an image with Danko ImageGen",
+      "Edit an image with Danko ImageGen"
+    ]
+  }
+}
