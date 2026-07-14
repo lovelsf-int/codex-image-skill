@@ -51,23 +51,26 @@ working directory. Existing files are never overwritten silently.
 
 1. If `DANKOTOKEN_API_KEY` is present, use it with
    `DANKOTOKEN_BASE_URL` or the default `https://dankotoken.com/v1`.
-2. If the dedicated key is absent, resolve the active Codex route using the
-   existing resolver.
-3. Accept the Codex fallback only when its parsed host is exactly
+2. If the dedicated key is absent and `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1`,
+   resolve the active Codex route using the existing resolver.
+3. Otherwise, stop with a secret-free configuration error that names the
+   dedicated key and the explicit fallback switch.
+4. Accept the Codex fallback only when its parsed host is exactly
    `dankotoken.com` or `www.dankotoken.com`.
-4. After that host validation only, allow the existing Codex active-provider
+5. After that host validation only, allow the existing Codex active-provider
    credential order, including provider auth commands and the legacy
    `auth.json.OPENAI_API_KEY` API-key field. This is an explicit
    convenience-first user choice: a stale official API key may be sent to the
    confirmed DankoToken host.
-5. Reject incomplete, unsafe, or non-DankoToken fallback routes. Never mix a
+6. Reject incomplete, unsafe, or non-DankoToken fallback routes. Never mix a
    Codex URL with a dedicated key or an environment URL with a Codex key.
-6. Never read OAuth fields (`tokens`, `access_token`, `refresh_token`), never
+7. Never read OAuth fields (`tokens`, `access_token`, `refresh_token`), never
    inspect the CC Switch database, and never fall back to `api.openai.com`.
 
 The server reads `DANKOTOKEN_API_KEY` from its inherited environment. Codex
 MCP configuration should forward only named environment variables using
-`env_vars`; the repository and Skill must not contain secret values.
+`env_vars`, including `DANKOTOKEN_ALLOW_CODEX_FALLBACK` only when convenience
+mode is desired; the repository and Skill must not contain secret values.
 
 The default endpoint is intentionally DankoToken-only. Users who need another
 domain must set `DANKOTOKEN_BASE_URL` explicitly or modify the source default;

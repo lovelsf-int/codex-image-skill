@@ -12,7 +12,7 @@
 
 - Default endpoint: `https://dankotoken.com/v1`.
 - Dedicated credentials: `DANKOTOKEN_API_KEY` and optional `DANKOTOKEN_BASE_URL`.
-- Priority: dedicated complete route first; otherwise active Codex route only if hostname is exactly `dankotoken.com` or `www.dankotoken.com`.
+- Priority: dedicated complete route first; otherwise active Codex route only when `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` and hostname is exactly `dankotoken.com` or `www.dankotoken.com`.
 - Never mix a URL and key from different sources; never read OAuth fields or the CC Switch database; never fall back to `api.openai.com`.
 - Explicit user choice: after exact Danko host validation, Codex fallback may use the active provider's auth command and legacy `auth.json.OPENAI_API_KEY`; this convenience-first mode can send a stale official API key to the confirmed DankoToken host.
 - Defaults: `gpt-image-2`, `1024x1024`, `medium`, and `png`.
