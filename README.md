@@ -1,69 +1,36 @@
 # Codex API ImageGen Skill
 
-通过用户自己的第三方 OpenAI-compatible Token 服务，从 Codex 生成单张图片。此 Skill 默认使用 `gpt-image-2`，并且只走 API/CLI 路径；它**不会修改、替换或调用** Codex 内置 `image_gen`。
+Generate one image through an OpenAI-compatible image endpoint while following
+the active Codex provider by default. The Skill uses `gpt-image-2` unless a
+different `gpt-image-*` model is requested. It only uses the bundled API/CLI
+path and never modifies, replaces, or invokes Codex built-in `image_gen`.
 
-## 功能与范围
+## Requirements
 
-- 生成单张图片，默认 `gpt-image-2`、`1024x1024`、`medium`、PNG。
-- 可指定 `--model`（仅接受 `gpt-image-*`）、`--size`、`--quality`、`--output-format`、`--out`、`--dry-run` 和 `--force`。
-- 首版不支持图片编辑、蒙版、批量生成或透明背景专用流程。
-
-## 前置条件
-
-- 支持个人 Skills 的 Codex
+- Codex with personal Skills enabled
 - Python 3.10+
-- 支持 Bearer Token 的第三方 OpenAI-compatible 服务
-- 服务需提供 `POST /v1/images/generations`，并返回 `data[].b64_json`
+- An active route that accepts Bearer authentication and implements
+  `POST /v1/images/generations`
+- A response containing `data[].b64_json`
 
-## 安装
-
-### Windows (PowerShell)
-
-```powershell
-git clone https://github.com/lovelsf-int/codex-image-skill.git
-Copy-Item -Recurse -Force .\codex-image-skill\skills\third-party-imagegen "$HOME\.codex\skills\third-party-imagegen"
-python -m pip install -r .\codex-image-skill\requirements.txt
-```
-
-### macOS / Linux
-
-```bash
-git clone https://github.com/lovelsf-int/codex-image-skill.git
-cp -R codex-image-skill/skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
-python -m pip install -r codex-image-skill/requirements.txt
-```
-
-安装后重启 Codex，使其发现新 Skill。
-
-## 配置环境变量
-
-请在本机终端或系统环境中设置变量，不要在 Codex 对话、截图或仓库中写入真实密钥。
-
-### Windows (PowerShell)
+Install the repository dependencies after cloning and copying the Skill to your
+Codex Skills directory:
 
 ```powershell
-$env:OPENAI_API_KEY = "your-token-service-key"
-$env:OPENAI_BASE_URL = "https://your-token-service.example/v1"
+python -m pip install -r .\requirements.txt
+Copy-Item -Recurse -Force .\skills\third-party-imagegen "$HOME\.codex\skills\third-party-imagegen"
 ```
 
-### macOS / Linux
+On macOS or Linux, use the corresponding `cp -R` command to copy the Skill.
 
-```bash
-export OPENAI_API_KEY='your-token-service-key'
-export OPENAI_BASE_URL='https://your-token-service.example/v1'
-```
+## Default: Follow Codex
 
-## 在 Codex 中使用
-
-```text
-Use $third-party-imagegen to generate a cinematic product photo of a red mechanical keyboard and save it to output/keyboard.png.
-```
-
-也可直接说明“通过我的第三方 Token 服务”或“使用 `OPENAI_BASE_URL` 和 `gpt-image-2` 生成图片”，以触发该 Skill。
-
-## CLI 示例
-
-先检查参数与路由，不创建客户端、不访问网络：
+The default CLI source is `--source auto|codex|env`, with `auto` selected when
+`--source` is omitted. `auto` first resolves the complete route selected by
+Codex, so no duplicate API configuration is needed. It only uses the legacy
+environment route when Codex is unavailable and the environment provides a
+complete explicit pair. Use `--source codex` to require Codex configuration,
+or `--source env` to require that legacy pair.
 
 ```bash
 python skills/third-party-imagegen/scripts/generate_image.py \
@@ -72,36 +39,111 @@ python skills/third-party-imagegen/scripts/generate_image.py \
   --dry-run
 ```
 
-实际生成并允许覆盖同名文件：
+`CODEX_HOME` selects the Codex configuration directory. `--codex-home` has
+priority when a command needs to inspect a different installation:
 
 ```bash
+CODEX_HOME=/path/to/codex python skills/third-party-imagegen/scripts/generate_image.py \
+  --prompt "A studio photo of a red mechanical keyboard" \
+  --dry-run
+
 python skills/third-party-imagegen/scripts/generate_image.py \
-  --prompt "A cinematic product photo of a red mechanical keyboard" \
-  --model gpt-image-2 \
-  --size 1024x1024 \
-  --quality medium \
-  --output-format png \
-  --out output/keyboard.png \
-  --force
+  --codex-home /path/to/codex \
+  --source codex \
+  --prompt "A studio photo of a red mechanical keyboard" \
+  --out output/keyboard.png
 ```
 
-## 路由与安全
+## Standard Codex Provider Example
 
-### No fallback
+Codex selects one provider through `model_provider`. The following is a
+standard DankoToken provider example, not a priority rule: the active
+`model_provider` is always the source of truth.
 
-`OPENAI_BASE_URL` 是必填项。缺失或无效时，脚本会在导入 SDK 和创建客户端之前失败，绝不会回退到 `api.openai.com`。实时调用还必须有 `OPENAI_API_KEY`；dry-run 仍要求 base URL，但不要求密钥。
+```toml
+model_provider = "dankotoken"
 
-脚本会将 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 显式传给 OpenAI Python SDK。日志仅显示服务主机名、模型和输出路径，不打印密钥、Authorization 头、查询参数或提示词。已有文件不会被覆盖，除非添加 `--force`；图片会先写入同目录临时文件，再原子地落到最终路径。
+[model_providers.dankotoken]
+name = "DankoToken"
+base_url = "https://dankotoken.com/v1"
+env_key = "DANKOTOKEN_API_KEY"
+wire_api = "responses"
+```
 
-## 兼容性提醒
+For the active provider only, the route resolver reads its `base_url` and can
+obtain a credential from `experimental_bearer_token`, the environment variable
+named by `env_key`, or a supported provider auth command. It does not inspect
+other provider entries or mix a URL from one route with a credential from
+another.
 
-服务必须兼容 OpenAI Python SDK 的 Bearer 认证，支持 `gpt-image-*` 模型（默认 `gpt-image-2`），暴露 `/v1/images/generations`，并在响应中返回 `data[].b64_json`。只返回 URL 的响应、仅支持 `/v1/responses` 或 `/v1/chat/completions` 的服务不兼容本 Skill。
+## CC Switch Compatibility
 
-不同 Token 服务对可选尺寸、质量档位或 `output_format` 的支持可能不同；服务端不支持时，脚本会报告对应的认证、端点/模型、配额或请求错误类别。
+CC Switch live Codex configuration is the source of truth. The Skill supports
+these three shapes without reading the CC Switch database:
 
-## 测试
+1. **Legacy mode.** CC Switch writes the selected provider URL to
+   `config.toml` and the key to `auth.json.OPENAI_API_KEY`.
+2. **Enhanced official-auth-preservation mode.** CC Switch retains official
+   Codex login data and stores the active third-party credential in that
+   provider's `experimental_bearer_token`. The Skill does not read or use any
+   OAuth token.
+3. **Localhost takeover.** CC Switch routes the active provider to a loopback
+   host such as `localhost`, `127.0.0.1`, or `::1` and uses `PROXY_MANAGED` as
+   the credential placeholder. `PROXY_MANAGED` is rejected for non-loopback
+   destinations, so it cannot be sent to an external service.
 
-测试使用 `unittest` 与 fake client/依赖注入，不发起网络请求或付费调用：
+A local CC Switch proxy must forward the image endpoint at
+`/v1/images/generations` (normally with a `/v1` base URL). A proxy that only
+implements `/v1/responses` or `/v1/chat/completions` cannot generate images
+with this Skill. A live 404 reports this compatibility limitation directly.
+
+## Legacy Explicit Environment Route
+
+Use this only when explicitly requested or when maintaining an existing
+environment-based setup. Both variables are required for live calls:
+
+```powershell
+$env:OPENAI_API_KEY = "your-token-service-key"
+$env:OPENAI_BASE_URL = "https://your-token-service.example/v1"
+python skills/third-party-imagegen/scripts/generate_image.py `
+  --source env `
+  --prompt "A cinematic product photo of a red mechanical keyboard" `
+  --out output/keyboard.png
+```
+
+```bash
+export OPENAI_API_KEY='your-token-service-key'
+export OPENAI_BASE_URL='https://your-token-service.example/v1'
+python skills/third-party-imagegen/scripts/generate_image.py \
+  --source env \
+  --prompt "A cinematic product photo of a red mechanical keyboard" \
+  --out output/keyboard.png
+```
+
+## Safety and Output
+
+Use `--dry-run` to validate the selected route and request parameters without
+creating an SDK client or making a network request. Its JSON summary is
+sanitized: it identifies the source, provider, credential source category,
+host, model, and output path, but never prints a key, Authorization header,
+OAuth token, URL query credential, auth-command output, or prompt.
+
+The Skill never reads CC Switch database contents, never uses OAuth tokens, and
+never falls back to `api.openai.com`. It stops when a selected route is missing
+or invalid. Existing output files are preserved unless `--force` is supplied;
+image data is written atomically after validating the returned base64 payload.
+
+## Compatibility
+
+The provider must support the requested `gpt-image-*` model, Bearer
+authentication, `/v1/images/generations`, and `data[].b64_json`. URL-only
+responses are unsupported. Providers can differ in their support for optional
+size, quality, and `output_format` values.
+
+## Tests
+
+The repository test suite uses `unittest` with fake clients and dependency
+injection; it does not require a paid image API call:
 
 ```bash
 python -m unittest discover -s tests -v
