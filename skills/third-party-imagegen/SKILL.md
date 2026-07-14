@@ -32,6 +32,6 @@ Generate one image through the bundled API client and the current Codex route by
 2. Choose the requested output path, or use `output/imagegen/output.png`.
 3. Run with `--source auto` by default. Pass `--codex-home` only when the user selects a non-default Codex home; use `--source env` only for an explicit legacy environment route.
 4. Resolve the selected route without exposing values, then run with the requested prompt and optional model, size, quality, output format, and output path.
-5. Report only sanitized source, provider, host, model, and output path.
+5. Sanitized summary fields are exactly and only: `source`, `provider`, `credential_source`, `host`, `model`, `output`, `output_format`, `quality`, and `size`. `key`, `prompt`, `config`, OAuth data, and token values are never included.
 
 Use `--dry-run` to validate routing and parameters without a network request. It does not construct an SDK client and never reveals credentials.

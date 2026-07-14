@@ -123,10 +123,9 @@ python skills/third-party-imagegen/scripts/generate_image.py \
 ## Safety and Output
 
 Use `--dry-run` to validate the selected route and request parameters without
-creating an SDK client or making a network request. Its JSON summary is
-sanitized: it identifies the source, provider, credential source category,
-host, model, and output path, but never prints a key, Authorization header,
-OAuth token, URL query credential, auth-command output, or prompt.
+creating an SDK client or making a network request.
+
+Sanitized summary fields are exactly and only: `source`, `provider`, `credential_source`, `host`, `model`, `output`, `output_format`, `quality`, and `size`. `key`, `prompt`, `config`, OAuth data, and token values are never included.
 
 The Skill never reads CC Switch database contents, never uses OAuth tokens, and
 never falls back to `api.openai.com`. It stops when a selected route is missing
