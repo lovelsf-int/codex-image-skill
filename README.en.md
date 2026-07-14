@@ -55,8 +55,7 @@ mkdir -p "$HOME/.codex/skills"
 cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 ```
 
-Python 3.10 and 3.11 install the conditional `tomli` compatibility dependency;
-newer supported Python versions use the standard-library TOML parser.
+Only Python 3.10 needs the conditional `tomli` compatibility dependency (`python_version < '3.11'`); Python 3.11 and newer use the standard-library TOML parser.
 
 ## Default Behavior: Follow Codex
 
@@ -65,8 +64,8 @@ The route selector is `--source auto|codex|env`. When `--source` is omitted,
 Codex, so users normally do not need to duplicate an API URL or credential.
 
 - `--source auto` first uses the active Codex route. It falls back to the
-  environment route only when Codex configuration is unavailable and both
-  legacy environment variables form a complete route.
+  environment route only when Codex configuration is unavailable and the
+  environment satisfies the current run mode's routing requirements.
 - `--source codex` requires a complete, valid Codex route and does not fall back
   to the environment.
 - `--source env` requires the explicit `OPENAI_API_KEY` and
@@ -75,6 +74,8 @@ Codex, so users normally do not need to duplicate an API URL or credential.
 Each route is resolved as a coherent pair. The Skill never combines a URL from
 one source or provider with a credential from another. Invalid or unsafe active
 configuration is reported instead of silently switching providers.
+
+Live environment routing requires both a valid URL and a key. With `--dry-run`, a valid URL is required but the key is not.
 
 Use `--dry-run` to validate routing and request parameters without constructing
 an SDK client or making a network request:
@@ -136,8 +137,7 @@ the source of truth. The Skill supports all three CC Switch integration modes:
    provider's `experimental_bearer_token`. The Skill does not read or use OAuth
    fields or OAuth tokens.
 3. **Localhost takeover mode.** CC Switch points the active provider at an exact
-   loopback host, using `PROXY_MANAGED` as the credential placeholder. The only
-   accepted loopback hosts are `localhost`, `127.0.0.1`, and `::1`.
+   loopback host, using `PROXY_MANAGED` as the credential placeholder. The exact `PROXY_MANAGED` allowlist contains only `localhost`, `127.0.0.1`, and `::1`.
    `PROXY_MANAGED` is rejected for every non-loopback destination and therefore
    cannot be sent to an external service.
 
@@ -153,8 +153,9 @@ Codex files and supported environment or auth-command sources described above.
 ## Explicit Environment Fallback
 
 Use the environment route only for an existing explicit setup or when
-`--source env` is intentionally selected. Both variables are required for live
-generation.
+`--source env` is intentionally selected. Live generation requires both
+`OPENAI_BASE_URL` and `OPENAI_API_KEY`; `--dry-run` still requires a valid URL
+but does not require the key.
 
 ### Windows PowerShell
 
