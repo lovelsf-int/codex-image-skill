@@ -54,6 +54,68 @@ cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 
 只有 Python 3.10 需要条件依赖 `tomli`（`python_version < '3.11'`）；Python 3.11 及更高版本使用标准库中的 TOML 解析器。
 
+## Danko MCP 图像工具（推荐）
+
+配置 Danko 专用 image MCP 后，它是正常 Codex 图像请求的预期替代路径：文本生成图像请使用
+`generate_danko_image`，基于本地参考图的图生图请使用 `edit_danko_image`，而不是内置的
+`image_gen` 工具。它不会跟随任意活动的 Codex 提供商。这是工作流选择，不会在技术上禁用、移除或修改 Codex 的内置工具。
+下面的旧版 CLI 仍可用于仅文本生成图像的兼容性回退，但在 MCP 可用时不是默认路径。
+
+将下面的无密钥 MCP 配置加入 Codex，并将占位路径替换为本机绝对路径。`env_vars` 只转发环境变量名，
+不要在此文件中填写任何密钥值。
+
+```toml
+[mcp_servers.danko_imagegen]
+command = "python"
+args = ["/absolute/path/to/danko_imagegen_server.py"]
+cwd = "/absolute/path/to/your/workspace"
+env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]
+default_tools_approval_mode = "writes"
+```
+
+路由遵循环境变量优先原则。转发 `DANKOTOKEN_API_KEY` 后，MCP 服务器只使用显式设置的
+`DANKOTOKEN_BASE_URL`，或精确的 Danko 回退地址 `https://dankotoken.com/v1`。没有专用密钥时，
+它只接受一条完整、当前活动的 Danko Codex 路由；绝不会从非 Danko Codex 提供商路由自动推断其他域名，
+也不会回退到 `api.openai.com`。
+
+所选的便利性优先回退只会在精确验证 Danko 主机后，使用活动提供商的提供商身份验证命令或
+旧式 `auth.json.OPENAI_API_KEY`。因此，过期的官方 API 密钥可能被发送到已确认的 DankoToken 主机。
+永不读取 OAuth 字段。
+
+省略 `output_path` 时，默认目标是 MCP 工作区内的
+`output/danko-imagegen/generated.<format>`。
+
+需要使用其他提供商域名时，必须显式设置 `DANKOTOKEN_BASE_URL`，或修改源码中的默认端点。MCP 不会推断
+非 Danko Codex 路由。
+
+### Windows 持久环境变量
+
+在 Windows 的“环境变量”界面中，为当前用户添加 `DANKOTOKEN_API_KEY`。仅在需要覆盖 Danko 默认端点时添加
+`DANKOTOKEN_BASE_URL`。修改持久 Windows 环境变量后必须重启 Codex，MCP 服务器才能收到更新后的值。
+MCP 配置只转发变量名，不包含密钥值。
+
+### MCP 工具示例
+
+使用 `generate_danko_image` 进行文本生成图像。两个 MCP 工具都会将结果写入配置的工作区文件。
+
+```text
+generate_danko_image(
+  prompt="A polished product photo of a red mechanical keyboard",
+  output_path="output/keyboard.png"
+)
+```
+
+仅可使用 `edit_danko_image` 编辑工作区内的本地 PNG、JPEG 或 WebP 参考图像；`input_image_path` 不能是 URL，
+也不能位于工作区外。
+
+```text
+edit_danko_image(
+  prompt="Change the keyboard keycaps to matte white",
+  input_image_path="assets/keyboard.png",
+  output_path="output/keyboard-white.png"
+)
+```
+
 ## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）
 
 本节仅适用于旧版的文本生成图像 CLI。路由选择参数是 `--source auto|codex|env`。省略
@@ -223,58 +285,3 @@ python -m unittest discover -s tests -v
 
 GitHub Actions 会在受支持的 Python 版本（包括 Python 3.10）上运行测试，以验证打包后的
 Skill 和文档契约；工作流不会调用真实图片接口。
-
-## Danko MCP 图像工具（推荐）
-
-配置 Danko 专用 image MCP 后，它是正常 Codex 图像请求的预期替代路径：文本生成图像请使用
-`generate_danko_image`，基于本地参考图的图生图请使用 `edit_danko_image`，而不是内置的
-`image_gen` 工具。它不会跟随任意活动的 Codex 提供商。这是工作流选择，不会在技术上禁用、移除或修改 Codex 的内置工具。
-下面的旧版 CLI 仍可用于仅文本生成图像的兼容性回退，但在 MCP 可用时不是默认路径。
-
-将下面的无密钥 MCP 配置加入 Codex，并将占位路径替换为本机绝对路径。`env_vars` 只转发环境变量名，
-不要在此文件中填写任何密钥值。
-
-```toml
-[mcp_servers.danko_imagegen]
-command = "python"
-args = ["/absolute/path/to/danko_imagegen_server.py"]
-cwd = "/absolute/path/to/your/workspace"
-env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]
-default_tools_approval_mode = "writes"
-```
-
-路由遵循环境变量优先原则。转发 `DANKOTOKEN_API_KEY` 后，MCP 服务器只使用显式设置的
-`DANKOTOKEN_BASE_URL`，或精确的 Danko 回退地址 `https://dankotoken.com/v1`。没有专用密钥时，
-它只接受一条完整、当前活动的 Danko Codex 路由；绝不会从非 Danko Codex 提供商路由自动推断其他域名，
-也不会回退到 `api.openai.com`。
-
-需要使用其他提供商域名时，必须显式设置 `DANKOTOKEN_BASE_URL`，或修改源码中的默认端点。MCP 不会推断
-非 Danko Codex 路由。
-
-### Windows 持久环境变量
-
-在 Windows 的“环境变量”界面中，为当前用户添加 `DANKOTOKEN_API_KEY`。仅在需要覆盖 Danko 默认端点时添加
-`DANKOTOKEN_BASE_URL`。修改持久 Windows 环境变量后必须重启 Codex，MCP 服务器才能收到更新后的值。
-MCP 配置只转发变量名，不包含密钥值。
-
-### MCP 工具示例
-
-使用 `generate_danko_image` 进行文本生成图像。两个 MCP 工具都会将结果写入配置的工作区文件。
-
-```text
-generate_danko_image(
-  prompt="A polished product photo of a red mechanical keyboard",
-  output_path="output/keyboard.png"
-)
-```
-
-仅可使用 `edit_danko_image` 编辑工作区内的本地 PNG、JPEG 或 WebP 参考图像；`input_image_path` 不能是 URL，
-也不能位于工作区外。
-
-```text
-edit_danko_image(
-  prompt="Change the keyboard keycaps to matte white",
-  input_image_path="assets/keyboard.png",
-  output_path="output/keyboard-white.png"
-)
-```

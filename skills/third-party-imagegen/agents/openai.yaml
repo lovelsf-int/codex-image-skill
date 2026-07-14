@@ -1,4 +1,4 @@
 interface:
   display_name: "Third-Party ImageGen"
-  short_description: "Generate GPT images through the active Codex route"
-  default_prompt: "Use $third-party-imagegen to generate an image through my active Codex provider."
+  short_description: "Generate and edit images through Danko MCP"
+  default_prompt: "Use $third-party-imagegen and the Danko MCP to generate or edit an image."

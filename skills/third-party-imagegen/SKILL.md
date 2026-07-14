@@ -20,7 +20,8 @@ legacy workflow. It is not the default when the Danko MCP is available.
   configured Danko MCP workflow.
 - `generate_danko_image` and `edit_danko_image` both write the returned image
   to a file inside the MCP workspace. Use `output_path` when the user chooses a
-  specific path; otherwise the server writes `generated.png`.
+  specific path; otherwise the server writes
+  `output/danko-imagegen/generated.<format>`.
 - `edit_danko_image` requires `input_image_path` to be a local PNG, JPEG, or
   WebP file inside that workspace. Never supply a URL or a path outside the
   workspace.
@@ -38,6 +39,10 @@ legacy workflow. It is not the default when the Danko MCP is available.
   is `dankotoken.com` or `www.dankotoken.com`. Never infer another provider or
   domain from Codex. A different provider domain requires an explicit
   `DANKOTOKEN_BASE_URL` override or a source change to the default endpoint.
+- The selected convenience-first fallback validates that exact Danko host
+  before it may use the active provider auth command or the legacy
+  `auth.json.OPENAI_API_KEY`. A stale official API key can therefore be sent to
+  the confirmed DankoToken host. OAuth fields are never read.
 
 ## CLI Compatibility Fallback
 

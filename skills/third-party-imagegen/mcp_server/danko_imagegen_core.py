@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
+import sys
 from typing import Callable, Mapping
 from urllib.parse import urlsplit
 
@@ -20,6 +22,9 @@ try:
     )
     from ..scripts.generate_image import ResponseError, atomic_write, decode_first_image
 except ImportError:
+    scripts_directory = str(Path(__file__).resolve().parents[1] / "scripts")
+    if scripts_directory not in sys.path:
+        sys.path.insert(0, scripts_directory)
     from codex_route import (
         ResolvedRoute,
         RouteError,
@@ -37,8 +42,11 @@ except ImportError:
 
 DEFAULT_DANKO_BASE_URL = "https://dankotoken.com/v1/"
 DANKO_HOSTS = frozenset({"dankotoken.com", "www.dankotoken.com"})
-DEFAULT_OUTPUT_NAME = "generated.png"
+DEFAULT_OUTPUT_DIRECTORY = Path("output") / "danko-imagegen"
+SUPPORTED_QUALITIES = frozenset({"low", "medium", "high", "auto"})
+SUPPORTED_OUTPUT_FORMATS = frozenset({"png", "jpeg", "webp"})
 SUPPORTED_EDIT_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
+SIZE_PATTERN = re.compile(r"^[1-9][0-9]*x[1-9][0-9]*$")
 
 
 class DankoImageError(RuntimeError):
@@ -54,10 +62,28 @@ class ImageRequest:
     output_format: str = "png"
 
     def to_payload(self) -> dict[str, str]:
-        if not self.prompt.strip():
+        if not isinstance(self.prompt, str) or not self.prompt.strip():
             raise DankoImageError("image prompt must not be empty")
-        if not self.model.startswith("gpt-image-"):
+        if not isinstance(self.model, str) or not self.model.startswith(
+            "gpt-image-"
+        ):
             raise DankoImageError("image model must start with gpt-image-")
+        if not isinstance(self.size, str) or (
+            self.size != "auto" and SIZE_PATTERN.fullmatch(self.size) is None
+        ):
+            raise DankoImageError(
+                "image size must be auto or use positive WIDTHxHEIGHT values"
+            )
+        if (
+            not isinstance(self.quality, str)
+            or self.quality not in SUPPORTED_QUALITIES
+        ):
+            raise DankoImageError("image quality is unsupported")
+        if (
+            not isinstance(self.output_format, str)
+            or self.output_format not in SUPPORTED_OUTPUT_FORMATS
+        ):
+            raise DankoImageError("image output format is unsupported")
         return {
             "model": self.model,
             "prompt": self.prompt,
@@ -163,28 +189,30 @@ def validate_input_image(input_image_path: Path, workspace: Path) -> Path:
 
 
 def _resolve_output_path(
-    output_path: Path | None, workspace: Path
+    output_path: Path | None, workspace: Path, output_format: str
 ) -> Path:
     resolved_workspace = _resolve_workspace(workspace)
-    return _resolve_within_workspace(
-        output_path if output_path is not None else Path(DEFAULT_OUTPUT_NAME),
+    default_output = DEFAULT_OUTPUT_DIRECTORY / f"generated.{output_format}"
+    output = _resolve_within_workspace(
+        output_path if output_path is not None else default_output,
         resolved_workspace,
     )
+    if output.exists():
+        raise DankoImageError("image output already exists")
+    return output
 
 
 def persist_response(
     response: object,
     route: ResolvedRoute,
     request: ImageRequest,
-    workspace: Path,
-    output_path: Path | None,
+    output: Path,
 ) -> GeneratedImage:
     try:
         content = decode_first_image(response)
     except ResponseError:
         raise DankoImageError("provider returned no valid base64 image") from None
 
-    output = _resolve_output_path(output_path, workspace)
     try:
         atomic_write(output, content, force=False)
     except FileExistsError:
@@ -209,6 +237,7 @@ def generate_image(
     output_path: Path | None = None,
 ) -> GeneratedImage:
     payload = request.to_payload()
+    output = _resolve_output_path(output_path, workspace, request.output_format)
     try:
         response = client_factory(route).images.generate(**payload)
     except DankoImageError:
@@ -217,7 +246,7 @@ def generate_image(
         raise DankoImageError(
             f"image generation request failed: {type(exc).__name__}"
         ) from None
-    return persist_response(response, route, request, workspace, output_path)
+    return persist_response(response, route, request, output)
 
 
 def edit_image(
@@ -228,8 +257,9 @@ def edit_image(
     workspace: Path,
     output_path: Path | None = None,
 ) -> GeneratedImage:
-    image = validate_input_image(input_image_path, workspace)
     payload = request.to_payload()
+    image = validate_input_image(input_image_path, workspace)
+    output = _resolve_output_path(output_path, workspace, request.output_format)
     try:
         with image.open("rb") as handle:
             response = client_factory(route).images.edit(
@@ -243,4 +273,4 @@ def edit_image(
         raise DankoImageError(
             f"image edit request failed: {type(exc).__name__}"
         ) from None
-    return persist_response(response, route, request, workspace, output_path)
+    return persist_response(response, route, request, output)

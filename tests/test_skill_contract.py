@@ -60,6 +60,7 @@ MCP_SECTION_ZH = "## Danko MCP 图像工具（推荐）"
 MCP_CONFIGURATION_END_EN = "### MCP Tool Examples"
 MCP_CONFIGURATION_END_ZH = "### MCP 工具示例"
 MCP_ENV_VARS_TOML = 'env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]'
+MCP_DEFAULT_OUTPUT = "output/danko-imagegen/generated.<format>"
 LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
 LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
 
@@ -117,6 +118,12 @@ class SkillContractTests(unittest.TestCase):
             "does not technically disable, remove,\n"
             "or modify Codex's built-in tool",
             "never falls back to `api.openai.com`",
+            "convenience-first fallback",
+            "provider auth command",
+            "legacy `auth.json.OPENAI_API_KEY`",
+            "stale official API key",
+            "OAuth fields are never read",
+            MCP_DEFAULT_OUTPUT,
         ):
             with self.subTest(language="en", term=term):
                 self.assertIn(term, english_mcp_configuration)
@@ -135,6 +142,12 @@ class SkillContractTests(unittest.TestCase):
             "必须显式设置 `DANKOTOKEN_BASE_URL`，或修改源码中的默认端点",
             "不会在技术上禁用、移除或修改 Codex 的内置工具",
             "也不会回退到 `api.openai.com`",
+            "便利性优先回退",
+            "提供商身份验证命令",
+            "旧式 `auth.json.OPENAI_API_KEY`",
+            "过期的官方 API 密钥",
+            "永不读取 OAuth 字段",
+            MCP_DEFAULT_OUTPUT,
         ):
             with self.subTest(language="zh-CN", term=term):
                 self.assertIn(term, chinese_mcp_configuration)
@@ -145,6 +158,12 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn(MCP_CONFIGURATION_END_ZH, chinese)
         self.assertNotIn(MCP_SECTION_ZH, english)
         self.assertNotIn(MCP_SECTION_EN, chinese)
+        self.assertLess(
+            english.index(MCP_SECTION_EN), english.index(LEGACY_CLI_SECTION_EN)
+        )
+        self.assertLess(
+            chinese.index(MCP_SECTION_ZH), chinese.index(LEGACY_CLI_SECTION_ZH)
+        )
         self.assertIn("legacy, text-to-image-only path", english)
         self.assertIn("仅文本生成图像的旧版路径", chinese)
         self.assertNotIn("Image editing, masks, batch generation", english)
@@ -158,6 +177,12 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("edit_danko_image", skill)
         self.assertIn("DANKOTOKEN_API_KEY", skill)
         self.assertIn("api.openai.com", skill)
+        self.assertIn("convenience-first fallback", skill)
+        self.assertIn("provider auth command", skill)
+        self.assertIn("legacy `auth.json.OPENAI_API_KEY`", skill)
+        self.assertIn("stale official API key", skill)
+        self.assertIn("OAuth fields are never read", skill)
+        self.assertIn(MCP_DEFAULT_OUTPUT, skill)
 
     def test_skill_metadata_and_routing_contract(self) -> None:
         skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
@@ -214,10 +239,12 @@ class SkillContractTests(unittest.TestCase):
         metadata = (SKILL_DIR / "agents" / "openai.yaml").read_text(encoding="utf-8")
         self.assertIn('display_name: "Third-Party ImageGen"', metadata)
         self.assertIn(
-            'short_description: "Generate GPT images through the active Codex route"',
+            'short_description: "Generate and edit images through Danko MCP"',
             metadata,
         )
         self.assertIn("$third-party-imagegen", metadata)
+        self.assertIn("Danko MCP", metadata)
+        self.assertNotIn("active Codex provider", metadata)
 
     def test_distribution_documents_explain_codex_auto_routing(self) -> None:
         readme = README_ZH.read_text(encoding="utf-8")

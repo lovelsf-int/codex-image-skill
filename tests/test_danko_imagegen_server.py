@@ -17,9 +17,7 @@ SERVER = (
 
 def load_module():
     module_directory = str(SERVER.parent)
-    scripts_directory = str(SERVER.parents[1] / "scripts")
     sys.path.insert(0, module_directory)
-    sys.path.insert(0, scripts_directory)
     try:
         spec = importlib.util.spec_from_file_location("danko_imagegen_server", SERVER)
         module = importlib.util.module_from_spec(spec)
@@ -28,7 +26,6 @@ def load_module():
         spec.loader.exec_module(module)
         return module
     finally:
-        sys.path.remove(scripts_directory)
         sys.path.remove(module_directory)
 
 
@@ -89,6 +86,18 @@ class ServerTests(unittest.TestCase):
             resolve_danko_route=resolve_danko_route,
             generate_image=generate_image,
             edit_image=edit_image,
+        )
+
+    def test_direct_stdio_import_resolves_sibling_script_helpers(self) -> None:
+        scripts = SERVER.parents[1] / "scripts"
+
+        self.assertEqual(
+            (scripts / "codex_route.py").resolve(),
+            Path(sys.modules["codex_route"].__file__).resolve(),
+        )
+        self.assertEqual(
+            (scripts / "generate_image.py").resolve(),
+            Path(sys.modules["generate_image"].__file__).resolve(),
         )
 
     def test_generate_tool_returns_image_and_sanitized_text(self) -> None:
