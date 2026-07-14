@@ -2,22 +2,24 @@
 
 ## Goal
 
-Add a local stdio MCP server that exposes DankoToken image generation as a
-structured `generate_danko_image` tool. The tool should feel like a native
-Codex image capability while using the user's third-party DankoToken route.
+Add a local stdio MCP server that exposes DankoToken text-to-image and
+image-to-image generation as structured tools. The tools should feel like
+native Codex image capabilities while using the user's third-party DankoToken
+route.
 
 ## Scope
 
-- Add one `generate_danko_image` MCP tool.
+- Add `generate_danko_image` and `edit_danko_image` MCP tools.
 - Generate through the OpenAI-compatible `/v1/images/generations` endpoint.
+- Edit through the OpenAI-compatible `/v1/images/edits` endpoint.
 - Return the generated image to the MCP client and save the same bytes under
   the workspace.
 - Update the existing Skill so it directs Codex to use the MCP tool when
   available while keeping the CLI as a compatibility fallback.
 - Document installation and secure configuration in Chinese and English.
 
-Image editing, masks, batch generation, remote HTTP MCP hosting, and provider
-selection beyond DankoToken are out of scope.
+Masks, batch generation, remote HTTP MCP hosting, and provider selection beyond
+DankoToken are out of scope.
 
 ## Tool Contract
 
@@ -30,9 +32,14 @@ The tool accepts these inputs:
 - `output_format` (default: `png`)
 - `output_path` (optional)
 
-It returns MCP image content for direct display and a concise text result with
-only the saved path plus non-secret generation metadata. With no explicit
-output path, it writes beneath `output/danko-imagegen/` in the MCP process
+`edit_danko_image` accepts the same generation controls plus a required
+`input_image_path`. It accepts only a local regular image file in the MCP
+working tree and uploads it as multipart form data. It never fetches arbitrary
+remote image URLs.
+
+Both tools return MCP image content for direct display and a concise text result
+with only the saved path plus non-secret generation metadata. With no explicit
+output path, they write beneath `output/danko-imagegen/` in the MCP process
 working directory. Existing files are never overwritten silently.
 
 ## Credential And Route Policy
@@ -54,12 +61,13 @@ MCP configuration should forward only named environment variables using
 
 ## Components
 
-- `mcp/danko_imagegen_server.py`: stdio MCP server and tool schema.
+- `mcp/danko_imagegen_server.py`: stdio MCP server and tool schemas.
 - Reused route and image helpers: existing `codex_route.py` and narrowly
   extracted generation functions from `generate_image.py` where doing so avoids
   duplicated request, base64 validation, and atomic-write logic.
-- `tests/test_danko_imagegen_mcp.py`: fake-client tests for contract, route
-  policy, direct image output, saved bytes, and secret-free errors.
+- `tests/test_danko_imagegen_mcp.py`: fake-client tests for both tool contracts,
+  route policy, direct image output, saved bytes, multipart image editing, and
+  secret-free errors.
 - Existing Skill and bilingual READMEs: tool-first workflow and MCP setup.
 
 ## Error Handling And Security
@@ -68,6 +76,9 @@ MCP configuration should forward only named environment variables using
 - Translate provider failures into sanitized tool errors; do not return raw
   SDK exceptions, token values, prompt text, or configuration contents.
 - Require `data[0].b64_json`; URL-only responses are unsupported.
+- Verify that an image-to-image input path stays under the MCP working
+  directory, is a regular file, and has an allowed image extension before
+  uploading it.
 - Use the existing atomic-write behavior.
 - Mark the MCP tool as writing because it saves output files.
 
