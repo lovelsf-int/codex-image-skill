@@ -2,14 +2,27 @@ from __future__ import annotations
 
 import argparse
 import base64
-from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import Callable, Mapping, Sequence, TextIO
-from urllib.parse import urlsplit
+from typing import Callable, Mapping, Protocol, Sequence, TextIO
+
+try:
+    from .codex_route import (
+        ResolvedRoute,
+        RouteError,
+        resolve_codex_home,
+        resolve_route,
+    )
+except ImportError:
+    from codex_route import (
+        ResolvedRoute,
+        RouteError,
+        resolve_codex_home,
+        resolve_route,
+    )
 
 
 DEFAULT_MODEL = "gpt-image-2"
@@ -27,11 +40,16 @@ class ResponseError(RuntimeError):
     """Raised when a provider response cannot be saved as an image."""
 
 
-@dataclass(frozen=True)
-class ApiConfig:
-    api_key: str
-    base_url: str
-    host: str
+class RouteResolver(Protocol):
+    def __call__(
+        self,
+        source: str,
+        *,
+        codex_home: Path,
+        env: Mapping[str, str],
+        dry_run: bool,
+    ) -> ResolvedRoute:
+        pass
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -52,45 +70,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_FORMAT,
     )
     parser.add_argument("--out", default=DEFAULT_OUT)
+    parser.add_argument(
+        "--source",
+        choices=("auto", "codex", "env"),
+        default="auto",
+    )
+    parser.add_argument("--codex-home")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
     return parser.parse_args(argv)
-
-
-def validate_base_url(value: str | None) -> str:
-    normalized = value.strip() if value else ""
-    if not normalized:
-        raise ConfigError(
-            "OPENAI_BASE_URL is required; refusing to fall back to api.openai.com"
-        )
-
-    parsed = urlsplit(normalized)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ConfigError("OPENAI_BASE_URL must be an absolute HTTP(S) URL")
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ConfigError(
-            "OPENAI_BASE_URL must not contain credentials, query parameters, or fragments"
-        )
-    try:
-        parsed.port
-    except ValueError as exc:
-        raise ConfigError("OPENAI_BASE_URL contains an invalid port") from exc
-    return normalized.rstrip("/") + "/"
-
-
-def load_config(
-    env: Mapping[str, str] | None = None, *, dry_run: bool
-) -> ApiConfig:
-    values = os.environ if env is None else env
-    base_url = validate_base_url(values.get("OPENAI_BASE_URL"))
-    api_key = values.get("OPENAI_API_KEY", "")
-    if not api_key and not dry_run:
-        raise ConfigError("OPENAI_API_KEY is required for live generation")
-    return ApiConfig(
-        api_key=api_key,
-        base_url=base_url,
-        host=urlsplit(base_url).hostname or "",
-    )
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, object]:
@@ -108,30 +96,33 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
 
 
 def sanitized_summary(
-    config: ApiConfig, payload: Mapping[str, object], out: Path
+    route: ResolvedRoute, payload: Mapping[str, object], out: Path
 ) -> str:
     return json.dumps(
         {
-            "host": config.host,
+            "credential_source": route.credential_source,
+            "host": route.host,
             "model": payload["model"],
             "output": str(out),
             "output_format": payload["output_format"],
+            "provider": route.provider_id,
             "quality": payload["quality"],
             "size": payload["size"],
+            "source": route.source,
         },
         ensure_ascii=True,
         sort_keys=True,
     )
 
 
-def create_client(config: ApiConfig) -> object:
+def create_client(route: ResolvedRoute) -> object:
     try:
         from openai import OpenAI
     except ImportError as exc:
         raise ConfigError(
             "openai SDK is not installed; run: python -m pip install openai>=2.15.0,<3"
         ) from exc
-    return OpenAI(api_key=config.api_key, base_url=config.base_url)
+    return OpenAI(api_key=route.api_key, base_url=route.base_url)
 
 
 def decode_first_image(response: object) -> bytes:
@@ -177,30 +168,51 @@ def run(
     args: argparse.Namespace,
     *,
     env: Mapping[str, str] | None = None,
-    client_factory: Callable[[ApiConfig], object] = create_client,
+    route_resolver: RouteResolver = resolve_route,
+    client_factory: Callable[[ResolvedRoute], object] = create_client,
     stdout: TextIO = sys.stdout,
 ) -> Path | None:
-    config = load_config(env, dry_run=args.dry_run)
+    values = os.environ if env is None else env
+    codex_home = resolve_codex_home(args.codex_home, values)
+    route = route_resolver(
+        args.source,
+        codex_home=codex_home,
+        env=values,
+        dry_run=args.dry_run,
+    )
     payload = build_payload(args)
     out = Path(args.out)
-    summary = sanitized_summary(config, payload, out)
+    summary = sanitized_summary(route, payload, out)
 
     if args.dry_run:
         print(summary, file=stdout)
         return None
 
-    client = client_factory(config)
+    client = client_factory(route)
     response = client.images.generate(**payload)
     atomic_write(out, decode_first_image(response), force=args.force)
     print(summary, file=stdout)
     return out
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+    route_resolver: RouteResolver = resolve_route,
+    client_factory: Callable[[ResolvedRoute], object] = create_client,
+    stdout: TextIO = sys.stdout,
+) -> int:
     try:
-        run(parse_args(argv))
+        run(
+            parse_args(argv),
+            env=env,
+            route_resolver=route_resolver,
+            client_factory=client_factory,
+            stdout=stdout,
+        )
         return 0
-    except (ConfigError, ResponseError, FileExistsError) as exc:
+    except (ConfigError, RouteError, ResponseError, FileExistsError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except OSError as exc:
@@ -211,7 +223,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if status in {401, 403}:
             message = "provider authentication failed; check the token service key"
         elif status == 404:
-            message = "provider does not expose the requested image endpoint or model"
+            message = (
+                "current provider does not expose the requested image endpoint or model; "
+                "a CC Switch local route must forward /images/generations"
+            )
         elif status == 429:
             message = "provider rate limit or quota exceeded"
         else:
