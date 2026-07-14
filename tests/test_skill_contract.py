@@ -74,6 +74,13 @@ def parse_yaml_frontmatter(document: str) -> dict[str, str]:
 
 
 class SkillContractTests(unittest.TestCase):
+    def test_skill_describes_danko_mcp_tools_and_security_policy(self) -> None:
+        skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("generate_danko_image", skill)
+        self.assertIn("edit_danko_image", skill)
+        self.assertIn("DANKOTOKEN_API_KEY", skill)
+        self.assertIn("api.openai.com", skill)
+
     def test_skill_metadata_and_routing_contract(self) -> None:
         skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         metadata = parse_yaml_frontmatter(skill)

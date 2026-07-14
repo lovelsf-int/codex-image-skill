@@ -5,33 +5,68 @@ description: Use when generating images through the active Codex provider, a thi
 
 # Third-Party Image Generation
 
-Generate one image through the bundled API client and the current Codex route by default.
+When the Danko image MCP server is configured, use it as the intended
+replacement path for normal Codex image work. Call `generate_danko_image` for
+text-to-image requests and `edit_danko_image` for edits instead of the built-in
+`image_gen` tool. This selects the configured MCP workflow; it does not disable,
+remove, or modify Codex's built-in tool.
 
-## Required Routing
+The bundled CLI remains a compatibility fallback for an explicitly requested
+legacy workflow. It is not the default when the Danko MCP is available.
 
-- Never use the built-in `image_gen` tool for this workflow.
-- The available source selector is `--source auto|codex|env`; default to `--source auto` unless the user explicitly asks for `codex` or `env`.
-- `--source auto` follows the active Codex provider. It uses the live `CODEX_HOME` configuration (or `--codex-home PATH`) without asking the user to duplicate values.
-- `--source codex` requires a usable Codex route. `--source env` is only for the legacy explicit `OPENAI_API_KEY` and `OPENAI_BASE_URL` pair.
-- Never fall back to `api.openai.com`. Stop when the selected source cannot provide a valid image route.
-- Never request, print, or place credentials in chat. Do not use OAuth tokens or read CC Switch database contents.
-- Use `gpt-image-2` unless the user explicitly requests another model beginning with `gpt-image-`.
-- This Skill supports single-image generation only. Do not add editing, masks, batch requests, or transparency-specific flows.
+## Danko MCP Workflow
 
-## Codex Route Resolution
+- Never use the built-in `image_gen` tool for an image request covered by the
+  configured Danko MCP workflow.
+- `generate_danko_image` and `edit_danko_image` both write the returned image
+  to a file inside the MCP workspace. Use `output_path` when the user chooses a
+  specific path; otherwise the server writes `generated.png`.
+- `edit_danko_image` requires `input_image_path` to be a local PNG, JPEG, or
+  WebP file inside that workspace. Never supply a URL or a path outside the
+  workspace.
+- Use `gpt-image-2` unless the user explicitly requests another model beginning
+  with `gpt-image-`. Both tools accept `prompt`, `model`, `size`, `quality`,
+  `output_format`, and `output_path`; editing also accepts `input_image_path`.
+- Secrets come only from forwarded `DANKOTOKEN_API_KEY` and optional
+  `DANKOTOKEN_BASE_URL` environment variables, or from one coherent active
+  Codex Danko route. Never request, print, or place credentials in chat. Do not
+  use OAuth tokens or read CC Switch database contents.
+- Environment routing has priority: when `DANKOTOKEN_API_KEY` is present, use
+  `DANKOTOKEN_BASE_URL` only when explicitly set, otherwise use the fixed
+  default `https://dankotoken.com/v1`. Never fall back to `api.openai.com`.
+- Without a forwarded dedicated key, use only an active Codex route whose host
+  is `dankotoken.com` or `www.dankotoken.com`. Never infer another provider or
+  domain from Codex. A different provider domain requires an explicit
+  `DANKOTOKEN_BASE_URL` override or a source change to the default endpoint.
 
-- Read only the current `model_provider` from Codex live configuration. A provider can supply credentials through `experimental_bearer_token`, an `env_key`, or its supported auth command; legacy CC Switch configuration can use `auth.json.OPENAI_API_KEY`.
-- A standard Codex provider such as DankoToken is selected only when its identifier is the current `model_provider`; this Skill never assigns provider priority.
-- Treat CC Switch live Codex configuration as the source of truth. Do not infer a provider priority, inspect other provider entries, or combine a URL from one source with a key from another.
-- CC Switch compatibility has three forms: legacy `auth.json.OPENAI_API_KEY`; enhanced official-auth-preservation with provider-scoped `experimental_bearer_token`; and loopback takeover using `PROXY_MANAGED`.
-- `PROXY_MANAGED` is accepted only when the parsed hostname is exactly `localhost`, `127.0.0.1`, or `::1`. A local proxy must forward `/v1/images/generations`; otherwise image generation cannot work even if other Codex requests do.
+## CLI Compatibility Fallback
 
-## Workflow
+- Use `scripts/generate_image.py` only when the user explicitly needs the
+  compatibility CLI. Its available selector is `--source auto|codex|env` and
+  it defaults to `--source auto`.
+- `--source auto` follows the active Codex provider using live `CODEX_HOME`
+  configuration (or `--codex-home PATH`). `--source codex` requires a usable
+  Codex route; `--source env` is for the legacy explicit `OPENAI_API_KEY` and
+  `OPENAI_BASE_URL` pair.
+- Read only the active `model_provider`. A provider can supply credentials
+  through `experimental_bearer_token`, an `env_key`, or its supported auth
+  command; legacy CC Switch configuration can use `auth.json.OPENAI_API_KEY`.
+- Treat CC Switch live configuration as the source of truth. Do not infer a
+  provider priority, inspect inactive provider entries, or combine a URL from
+  one source with a key from another. `PROXY_MANAGED` is accepted only for
+  `localhost`, `127.0.0.1`, or `::1`.
 
-1. Resolve `scripts/generate_image.py` from this Skill.
-2. Choose the requested output path, or use `output/imagegen/output.png`.
-3. Run with `--source auto` by default. Pass `--codex-home` only when the user selects a non-default Codex home; use `--source env` only for an explicit legacy environment route.
-4. Resolve the selected route without exposing values, then run with the requested prompt and optional model, size, quality, output format, and output path.
-5. Sanitized summary fields are exactly and only: `source`, `provider`, `credential_source`, `host`, `model`, `output`, `output_format`, `quality`, and `size`. `key`, `prompt`, `config`, OAuth data, and token values are never included.
+## MCP Request Pattern
 
-Use `--dry-run` to validate routing and parameters without a network request. It does not construct an SDK client and never reveals credentials.
+1. Confirm the Danko MCP is configured and select `generate_danko_image` or
+   `edit_danko_image`.
+2. For an edit, confirm that the requested source image is a local workspace
+   image before calling the tool.
+3. Send the prompt and requested output settings, with an explicit
+   `output_path` when needed. Do not expose route or credential values.
+4. Report the written output path. Sanitized summaries must never include a
+   key, prompt, config, OAuth data, or token value.
+
+For CLI compatibility work, use `--dry-run` to validate routing and parameters
+without a network request. It does not construct an SDK client and never
+reveals credentials.

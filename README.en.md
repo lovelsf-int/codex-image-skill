@@ -57,6 +57,69 @@ cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 
 Only Python 3.10 needs the conditional `tomli` compatibility dependency (`python_version < '3.11'`); Python 3.11 and newer use the standard-library TOML parser.
 
+## Danko MCP Image Tools (Recommended)
+
+When configured, the Danko image MCP is the intended replacement path for
+normal Codex image work: use `generate_danko_image` for text-to-image and
+`edit_danko_image` for edits instead of the built-in `image_gen` tool. This
+selects an image-generation workflow; it does not technically disable, remove,
+or modify Codex's built-in tool. The CLI documented below remains a
+compatibility fallback, not the default when the MCP is available.
+
+Add this secret-free MCP configuration to Codex, replacing the placeholder
+paths with local absolute paths. `env_vars` forwards variable names only; never
+put a key value in this file.
+
+```toml
+[mcp_servers.danko_imagegen]
+command = "python"
+args = ["/absolute/path/to/danko_imagegen_server.py"]
+cwd = "/absolute/path/to/your/workspace"
+env_vars = ["DANKOTOKEN_API_KEY", "DANKOTOKEN_BASE_URL"]
+default_tools_approval_mode = "writes"
+```
+
+Routing is environment-first. When `DANKOTOKEN_API_KEY` is forwarded to the
+MCP server, it uses an explicitly supplied `DANKOTOKEN_BASE_URL`, or the exact
+Danko fallback `https://dankotoken.com/v1`. Without that dedicated key, it
+accepts only one coherent active Codex route on the Danko host. It never
+auto-infers another provider or domain from a non-Danko Codex route, and it
+never falls back to `api.openai.com`.
+
+To use another provider domain, explicitly set `DANKOTOKEN_BASE_URL` or modify
+the source default endpoint. The MCP does not infer a non-Danko Codex route.
+
+### Persistent Windows Environment
+
+In Windows **Environment Variables**, add `DANKOTOKEN_API_KEY` for your user.
+Add `DANKOTOKEN_BASE_URL` only when you need to override the Danko default.
+Restart Codex after persistent Windows environment-variable changes so the MCP
+server receives the updated values. The MCP configuration forwards these names;
+it does not contain secret values.
+
+### MCP Tool Examples
+
+Use `generate_danko_image` for text-to-image. Both MCP tools write the result
+to a file in the configured workspace.
+
+```text
+generate_danko_image(
+  prompt="A polished product photo of a red mechanical keyboard",
+  output_path="output/keyboard.png"
+)
+```
+
+Use `edit_danko_image` only with a local PNG, JPEG, or WebP reference image
+inside the workspace; `input_image_path` cannot be a URL or a path outside it.
+
+```text
+edit_danko_image(
+  prompt="Change the keyboard keycaps to matte white",
+  input_image_path="assets/keyboard.png",
+  output_path="output/keyboard-white.png"
+)
+```
+
 ## Default Behavior: Follow Codex
 
 The route selector is `--source auto|codex|env`. When `--source` is omitted,
