@@ -192,6 +192,7 @@ requires_openai_auth = true
             self.assertEqual(
                 route.credential_source, "provider.experimental_bearer_token"
             )
+            self.assertNotIn("provider-secret", repr(route))
             self.assertNotIn("oauth-secret", repr(route))
 
     def test_cc_switch_legacy_mode_reads_only_auth_json_api_key(self) -> None:
@@ -213,51 +214,81 @@ base_url = "https://relay.example/v1"
             self.assertEqual(route.api_key, "legacy-secret")
             self.assertEqual(route.credential_source, "auth.json.OPENAI_API_KEY")
 
-    def test_proxy_managed_requires_loopback(self) -> None:
-        with TemporaryDirectory() as directory:
-            home = Path(directory)
-            write_codex_files(
-                home,
-                '''
+    def test_proxy_managed_accepts_exact_allowlisted_hosts(self) -> None:
+        allowed_urls = (
+            "http://localhost:15721/v1",
+            "http://127.0.0.1:15721/v1",
+            "http://[::1]:15721/v1",
+        )
+        for base_url in allowed_urls:
+            with self.subTest(base_url=base_url), TemporaryDirectory() as directory:
+                home = Path(directory)
+                write_codex_files(
+                    home,
+                    f'''
 model_provider = "custom"
 [model_providers.custom]
-base_url = "http://127.0.0.1:15721/v1"
+base_url = "{base_url}"
 experimental_bearer_token = "PROXY_MANAGED"
 ''',
-            )
-            route = self.mod.resolve_codex_route(home, {}, dry_run=False)
-            self.assertEqual(route.base_url, "http://127.0.0.1:15721/v1/")
+                )
+                route = self.mod.resolve_codex_route(home, {}, dry_run=False)
+                self.assertEqual(route.base_url, f"{base_url}/")
 
+    def test_proxy_managed_rejects_non_allowlisted_hosts(self) -> None:
+        rejected_urls = (
+            "https://relay.example/v1",
+            "http://127.0.0.2:15721/v1",
+        )
+        for base_url in rejected_urls:
+            with self.subTest(base_url=base_url), TemporaryDirectory() as directory:
+                home = Path(directory)
+                write_codex_files(
+                    home,
+                    f'''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "{base_url}"
+experimental_bearer_token = "PROXY_MANAGED"
+''',
+                )
+                with self.assertRaises(self.mod.RouteInvalid):
+                    self.mod.resolve_codex_route(home, {}, dry_run=False)
+                with self.assertRaises(self.mod.RouteInvalid):
+                    self.mod.resolve_codex_route(home, {}, dry_run=True)
+
+    def test_malformed_auth_json_discards_secret_parser_context(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
             write_codex_files(
                 home,
                 '''
 model_provider = "custom"
 [model_providers.custom]
 base_url = "https://relay.example/v1"
-experimental_bearer_token = "PROXY_MANAGED"
 ''',
             )
-            with self.assertRaises(self.mod.RouteInvalid):
+            malformed = (
+                '{"OPENAI_API_KEY":"malformed-secret",'
+                '"tokens":{"access_token":"oauth-secret"}'
+            )
+            (home / "auth.json").write_text(malformed, encoding="utf-8")
+            with self.assertRaises(self.mod.RouteInvalid) as caught:
                 self.mod.resolve_codex_route(home, {}, dry_run=False)
-            with self.assertRaises(self.mod.RouteInvalid):
-                self.mod.resolve_codex_route(home, {}, dry_run=True)
+            exception = caught.exception
 
-    def test_proxy_managed_rejects_non_allowlisted_loopback_address(self) -> None:
-        with TemporaryDirectory() as directory:
-            home = Path(directory)
-            write_codex_files(
-                home,
-                '''
-model_provider = "custom"
-[model_providers.custom]
-base_url = "http://127.0.0.2:15721/v1"
-experimental_bearer_token = "PROXY_MANAGED"
-''',
+            formatted = "".join(
+                traceback.format_exception(
+                    type(exception), exception, exception.__traceback__
+                )
             )
-            with self.assertRaises(self.mod.RouteInvalid):
-                self.mod.resolve_codex_route(home, {}, dry_run=False)
-            with self.assertRaises(self.mod.RouteInvalid):
-                self.mod.resolve_codex_route(home, {}, dry_run=True)
+            self.assertEqual(
+                str(exception), "Codex auth.json could not be read or parsed"
+            )
+            self.assertIsNone(exception.__cause__)
+            self.assertIsNone(exception.__context__)
+            self.assertNotIn("malformed-secret", formatted)
+            self.assertNotIn("oauth-secret", formatted)
 
     def test_oauth_only_auth_json_is_not_an_api_key(self) -> None:
         with TemporaryDirectory() as directory:
@@ -371,6 +402,127 @@ base_url = "https://relay.example/v1"
             self.mod.validate_base_url("https://[::1")
 
 
+class CredentialRedactionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.mod = load_module()
+
+    def assert_route_repr_redacts(
+        self, route, secret: str, credential_source: str
+    ) -> None:
+        self.assertEqual(route.api_key, secret)
+        self.assertEqual(route.credential_source, credential_source)
+        self.assertNotIn("api_key=", repr(route))
+        self.assertNotIn(secret, repr(route))
+
+    def test_codex_route_repr_redacts_every_credential_source(self) -> None:
+        scenarios = (
+            (
+                "provider token",
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+experimental_bearer_token = "provider-secret"
+''',
+                {},
+                None,
+                Mock(),
+                "provider-secret",
+                "provider.experimental_bearer_token",
+            ),
+            (
+                "env key",
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+env_key = "CUSTOM_API_KEY"
+''',
+                {"CUSTOM_API_KEY": "env-key-secret"},
+                None,
+                Mock(),
+                "env-key-secret",
+                "provider.env_key",
+            ),
+            (
+                "auth command",
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+[model_providers.custom.auth]
+command = "credential-helper"
+''',
+                {},
+                None,
+                Mock(return_value="command-secret"),
+                "command-secret",
+                "provider.auth.command",
+            ),
+            (
+                "top-level token",
+                '''
+model_provider = "custom"
+experimental_bearer_token = "top-level-secret"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+''',
+                {},
+                None,
+                Mock(),
+                "top-level-secret",
+                "experimental_bearer_token",
+            ),
+            (
+                "legacy auth.json key",
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://relay.example/v1"
+''',
+                {},
+                {"OPENAI_API_KEY": "legacy-secret"},
+                Mock(),
+                "legacy-secret",
+                "auth.json.OPENAI_API_KEY",
+            ),
+        )
+        for (
+            label,
+            config,
+            env,
+            auth,
+            runner,
+            secret,
+            credential_source,
+        ) in scenarios:
+            with self.subTest(source=label), TemporaryDirectory() as directory:
+                home = Path(directory)
+                write_codex_files(home, config, auth)
+                route = self.mod.resolve_codex_route(
+                    home,
+                    env,
+                    dry_run=False,
+                    auth_command_runner=runner,
+                )
+                self.assert_route_repr_redacts(
+                    route, secret, credential_source
+                )
+
+    def test_env_route_repr_redacts_explicit_environment_credential(self) -> None:
+        route = self.mod.resolve_env_route(
+            {
+                "OPENAI_BASE_URL": "https://environment.example/v1",
+                "OPENAI_API_KEY": "explicit-env-secret",
+            },
+            dry_run=False,
+        )
+        self.assert_route_repr_redacts(
+            route, "explicit-env-secret", "OPENAI_API_KEY"
+        )
+
+
 class AuthCommandTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -471,6 +623,40 @@ class EnvironmentRouteTests(unittest.TestCase):
                     },
                     dry_run=False,
                 )
+
+    def test_codex_url_is_never_mixed_with_ambient_environment_key(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "https://codex-provider.example/v1"
+''',
+            )
+            env = {
+                "OPENAI_BASE_URL": "https://environment.example/v1",
+                "OPENAI_API_KEY": "environment-key",
+            }
+
+            with self.assertRaises(self.mod.RouteUnavailable):
+                self.mod.resolve_route(
+                    "codex",
+                    codex_home=home,
+                    env=env,
+                    dry_run=False,
+                )
+
+            route = self.mod.resolve_route(
+                "auto",
+                codex_home=home,
+                env=env,
+                dry_run=False,
+            )
+            self.assertEqual(route.source, "env")
+            self.assertEqual(route.base_url, "https://environment.example/v1/")
+            self.assertEqual(route.api_key, "environment-key")
 
     def test_proxy_managed_env_route_accepts_exact_loopback_hosts(self) -> None:
         loopback_urls = (

@@ -24,7 +24,7 @@ Generate one image through the bundled API client and the current Codex route by
 - A standard Codex provider such as DankoToken is selected only when its identifier is the current `model_provider`; this Skill never assigns provider priority.
 - Treat CC Switch live Codex configuration as the source of truth. Do not infer a provider priority, inspect other provider entries, or combine a URL from one source with a key from another.
 - CC Switch compatibility has three forms: legacy `auth.json.OPENAI_API_KEY`; enhanced official-auth-preservation with provider-scoped `experimental_bearer_token`; and loopback takeover using `PROXY_MANAGED`.
-- `PROXY_MANAGED` is valid only for a loopback CC Switch route. A local proxy must forward `/v1/images/generations`; otherwise image generation cannot work even if other Codex requests do.
+- `PROXY_MANAGED` is accepted only when the parsed hostname is exactly `localhost`, `127.0.0.1`, or `::1`. A local proxy must forward `/v1/images/generations`; otherwise image generation cannot work even if other Codex requests do.
 
 ## Workflow
 

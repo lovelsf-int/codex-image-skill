@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
 import subprocess
@@ -31,7 +31,7 @@ class RouteInvalid(RouteError):
 
 @dataclass(frozen=True)
 class ResolvedRoute:
-    api_key: str
+    api_key: str = field(repr=False)
     base_url: str
     host: str
     source: str
@@ -62,15 +62,24 @@ def load_toml(path: Path) -> dict[str, Any]:
 
 def load_auth_api_key(path: Path) -> str:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise RouteInvalid("Codex auth.json could not be read or parsed") from exc
-    if not isinstance(data, dict):
-        raise RouteInvalid("Codex auth.json must contain a JSON object")
-    value = data.get("OPENAI_API_KEY")
-    return value.strip() if isinstance(value, str) else ""
+    except (OSError, UnicodeError):
+        pass
+    else:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = ""
+        else:
+            if not isinstance(data, dict):
+                raise RouteInvalid("Codex auth.json must contain a JSON object")
+            value = data.get("OPENAI_API_KEY")
+            return value.strip() if isinstance(value, str) else ""
+
+    # Raise outside the handlers so secret-bearing parser input is not retained.
+    raise RouteInvalid("Codex auth.json could not be read or parsed") from None
 
 
 def validate_base_url(value: str | None) -> str:
@@ -213,7 +222,7 @@ def is_loopback_host(host: str) -> bool:
 def validate_proxy_placeholder(api_key: str, host: str) -> None:
     if api_key == PROXY_PLACEHOLDER and not is_loopback_host(host):
         raise RouteInvalid(
-            "PROXY_MANAGED is only valid for a loopback CC Switch route"
+            "PROXY_MANAGED requires host localhost, 127.0.0.1, or ::1"
         )
 
 
