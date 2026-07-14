@@ -71,6 +71,12 @@ LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
 LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
 PLUGIN_INSTALLATION_SECTION_EN = "### Plugin installation (recommended)"
 PLUGIN_INSTALLATION_SECTION_ZH = "### 插件安装（推荐）"
+PLUGIN_INSTALLATION_END_EN = "### Python runtime dependencies"
+PLUGIN_INSTALLATION_END_ZH = "### Python 运行时依赖"
+SKILL_COPY_COMPATIBILITY_SECTION_EN = "### Manual/legacy Skill-copy compatibility"
+SKILL_COPY_COMPATIBILITY_SECTION_ZH = "### 手动/旧版 Skill 复制兼容性"
+INSTALLATION_END_EN = "## Danko MCP Image Tools (Recommended)"
+INSTALLATION_END_ZH = "## Danko MCP 图像工具（推荐）"
 MANUAL_MCP_SECTION_EN = "### Compatibility/manual MCP TOML setup"
 MANUAL_MCP_SECTION_ZH = "### 兼容性/手动 MCP TOML 配置"
 
@@ -232,35 +238,78 @@ class SkillContractTests(unittest.TestCase):
         chinese = README_ZH.read_text(encoding="utf-8")
         english = README_EN.read_text(encoding="utf-8")
 
-        for language, document, plugin_section, manual_section, automatic_registration in (
+        for (
+            language,
+            document,
+            plugin_section,
+            plugin_end,
+            skill_copy_section,
+            installation_end,
+            manual_mcp_section,
+            automatic_registration,
+            external_key_configuration,
+        ) in (
             (
                 "en",
                 english,
                 PLUGIN_INSTALLATION_SECTION_EN,
+                PLUGIN_INSTALLATION_END_EN,
+                SKILL_COPY_COMPATIBILITY_SECTION_EN,
+                INSTALLATION_END_EN,
                 MANUAL_MCP_SECTION_EN,
                 "automatically registers the local\nMCP server",
+                "Configure `DANKOTOKEN_API_KEY` outside this repository",
             ),
             (
                 "zh-CN",
                 chinese,
                 PLUGIN_INSTALLATION_SECTION_ZH,
+                PLUGIN_INSTALLATION_END_ZH,
+                SKILL_COPY_COMPATIBILITY_SECTION_ZH,
+                INSTALLATION_END_ZH,
                 MANUAL_MCP_SECTION_ZH,
                 "自动注册 `.mcp.json` 中声明的本地 MCP 服务器",
+                "请在仓库外部配置 `DANKOTOKEN_API_KEY`",
             ),
         ):
+            plugin_installation = section_after(document, plugin_section, plugin_end)
+            skill_copy_compatibility = section_after(
+                document, skill_copy_section, installation_end
+            )
+            manual_mcp_compatibility = section_after(
+                document, manual_mcp_section, MCP_CONFIGURATION_END_EN
+                if language == "en"
+                else MCP_CONFIGURATION_END_ZH,
+            )
+
             for term in (
                 "danko-imagegen",
                 ".codex-plugin/plugin.json",
                 ".mcp.json",
                 "DANKOTOKEN_API_KEY",
                 plugin_section,
-                manual_section,
                 automatic_registration,
+                external_key_configuration,
             ):
                 with self.subTest(language=language, term=term):
-                    self.assertIn(term, document)
+                    self.assertIn(term, plugin_installation)
             with self.subTest(language=language, requirement="plugin-first"):
-                self.assertLess(document.index(plugin_section), document.index(manual_section))
+                self.assertLess(document.index(plugin_section), document.index(skill_copy_section))
+                self.assertLess(document.index(plugin_section), document.index(manual_mcp_section))
+            with self.subTest(language=language, requirement="no-copy-in-plugin"):
+                self.assertNotIn("Copy-Item -Recurse", plugin_installation)
+                self.assertNotIn("cp -R ./skills/third-party-imagegen", plugin_installation)
+            with self.subTest(language=language, requirement="copy-is-compatibility-only"):
+                self.assertIn("Copy-Item -Recurse", skill_copy_compatibility)
+                self.assertIn(
+                    "cp -R ./skills/third-party-imagegen", skill_copy_compatibility
+                )
+            with self.subTest(language=language, requirement="manual-mcp-is-compatibility-only"):
+                self.assertIn("manual MCP TOML" if language == "en" else "手动 MCP TOML", manual_mcp_compatibility)
+                self.assertNotIn(
+                    "[mcp_servers.danko_imagegen]",
+                    document[: document.index(manual_mcp_section)],
+                )
 
         self.assertIn(
             "manual MCP TOML\ncompatibility option only", english

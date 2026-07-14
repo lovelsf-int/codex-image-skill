@@ -56,21 +56,42 @@ to run the local MCP server.
 
 ```powershell
 python -m pip install -r .\requirements.txt
-Copy-Item -Recurse -Force .\skills\third-party-imagegen "$HOME\.codex\skills\third-party-imagegen"
 ```
 
 ### macOS
 
 ```bash
 python3 -m pip install -r ./requirements.txt
-mkdir -p "$HOME/.codex/skills"
-cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 ```
 
 ### Linux
 
 ```bash
 python3 -m pip install -r ./requirements.txt
+```
+
+### Manual/legacy Skill-copy compatibility
+
+Plugin installation is the primary path. Use this compatibility setup only if
+you cannot install the repository as a plugin and specifically need to copy the
+Skill manually.
+
+#### Windows PowerShell
+
+```powershell
+Copy-Item -Recurse -Force .\skills\third-party-imagegen "$HOME\.codex\skills\third-party-imagegen"
+```
+
+#### macOS
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
+```
+
+#### Linux
+
+```bash
 mkdir -p "$HOME/.codex/skills"
 cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 ```

@@ -46,21 +46,40 @@ Codex 凭据时，才设置 `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1`。
 
 ```powershell
 python -m pip install -r .\requirements.txt
-Copy-Item -Recurse -Force .\skills\third-party-imagegen "$HOME\.codex\skills\third-party-imagegen"
 ```
 
 ### macOS
 
 ```bash
 python3 -m pip install -r ./requirements.txt
-mkdir -p "$HOME/.codex/skills"
-cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 ```
 
 ### Linux
 
 ```bash
 python3 -m pip install -r ./requirements.txt
+```
+
+### 手动/旧版 Skill 复制兼容性
+
+插件安装是首要路径。仅在无法将本仓库安装为插件，并且确实需要手动复制 Skill 时，才使用此兼容设置。
+
+#### Windows PowerShell
+
+```powershell
+Copy-Item -Recurse -Force .\skills\third-party-imagegen "$HOME\.codex\skills\third-party-imagegen"
+```
+
+#### macOS
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
+```
+
+#### Linux
+
+```bash
 mkdir -p "$HOME/.codex/skills"
 cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 ```
