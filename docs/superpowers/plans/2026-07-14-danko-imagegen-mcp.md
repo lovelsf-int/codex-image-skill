@@ -20,6 +20,7 @@
 - Image-to-image accepts only regular `.png`, `.jpg`, `.jpeg`, or `.webp` files inside the MCP working directory.
 - Return MCP image content and secret-free text; atomically write the same bytes under `output/danko-imagegen/` by default.
 - Do not overwrite files silently.
+- When configured, the Skill and MCP server instructions must direct Codex to use the Danko tools instead of the built-in `image_gen` tool; do not claim to disable or modify that built-in tool.
 - Do not run Python, tests, package installation, or real image calls locally. GitHub Actions is the execution verifier.
 
 ---
@@ -203,7 +204,12 @@ def test_skill_describes_danko_mcp_tools_and_security_policy(self) -> None:
 
 - [ ] **Step 2: Update Skill with MCP-first instructions**
 
-Document MCP tool preference with CLI compatibility fallback. State both tools write files, editing requires a local workspace image, and secrets come only from forwarded dedicated variables or a coherent active Codex Danko route.
+Document that the configured Danko MCP replaces the normal image-generation
+path: use `generate_danko_image` or `edit_danko_image` instead of the built-in
+`image_gen` tool. Keep CLI as a compatibility fallback and state that this does
+not technically disable or modify the built-in tool. State both tools write
+files, editing requires a local workspace image, and secrets come only from
+forwarded dedicated variables or a coherent active Codex Danko route.
 
 - [ ] **Step 3: Update Chinese and English README files**
 

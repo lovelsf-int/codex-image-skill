@@ -7,6 +7,11 @@ image-to-image generation as structured tools. The tools should feel like
 native Codex image capabilities while using the user's third-party DankoToken
 route.
 
+When configured, this MCP is the intended replacement path for Codex's default
+image-generation tool: the bundled Skill must direct image-generation requests
+to these Danko tools instead of the built-in `image_gen` tool. It does not
+modify, uninstall, or technically disable the built-in tool.
+
 ## Scope
 
 - Add `generate_danko_image` and `edit_danko_image` MCP tools.
