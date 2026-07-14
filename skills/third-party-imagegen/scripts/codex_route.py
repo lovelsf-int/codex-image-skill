@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import ipaddress
 import json
 from pathlib import Path
 import subprocess
@@ -152,6 +151,7 @@ def run_auth_command(auth: Mapping[str, Any]) -> str:
         raise RouteInvalid("provider auth.args must contain only strings")
     if not isinstance(timeout_ms, int) or timeout_ms <= 0:
         raise RouteInvalid("provider auth.timeout_ms must be a positive integer")
+    command_failed = False
     try:
         completed = subprocess.run(
             [command, *args],
@@ -162,8 +162,10 @@ def run_auth_command(auth: Mapping[str, Any]) -> str:
             timeout=timeout_ms / 1000,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RouteInvalid("provider auth command failed or timed out") from exc
+    except (OSError, subprocess.TimeoutExpired):
+        command_failed = True
+    if command_failed:
+        raise RouteInvalid("provider auth command failed or timed out") from None
     token = completed.stdout.strip()
     if completed.returncode != 0 or not token:
         raise RouteInvalid("provider auth command returned no usable credential")
@@ -205,12 +207,7 @@ def provider_credential(
 
 
 def is_loopback_host(host: str) -> bool:
-    if host.lower() == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
+    return host.lower() == "localhost" or host in {"127.0.0.1", "::1"}
 
 
 def validate_proxy_placeholder(api_key: str, host: str) -> None:

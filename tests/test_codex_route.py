@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+import traceback
 import unittest
 from unittest.mock import Mock, patch
 
@@ -241,6 +242,23 @@ experimental_bearer_token = "PROXY_MANAGED"
             with self.assertRaises(self.mod.RouteInvalid):
                 self.mod.resolve_codex_route(home, {}, dry_run=True)
 
+    def test_proxy_managed_rejects_non_allowlisted_loopback_address(self) -> None:
+        with TemporaryDirectory() as directory:
+            home = Path(directory)
+            write_codex_files(
+                home,
+                '''
+model_provider = "custom"
+[model_providers.custom]
+base_url = "http://127.0.0.2:15721/v1"
+experimental_bearer_token = "PROXY_MANAGED"
+''',
+            )
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.resolve_codex_route(home, {}, dry_run=False)
+            with self.assertRaises(self.mod.RouteInvalid):
+                self.mod.resolve_codex_route(home, {}, dry_run=True)
+
     def test_oauth_only_auth_json_is_not_an_api_key(self) -> None:
         with TemporaryDirectory() as directory:
             home = Path(directory)
@@ -358,6 +376,27 @@ class AuthCommandTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.mod = load_module()
 
+    def assert_auth_failure_is_sanitized(self, error: BaseException) -> None:
+        command = "sentinel-command"
+        secret = "sentinel-secret"
+        with patch.object(self.mod.subprocess, "run", side_effect=error):
+            with self.assertRaises(self.mod.RouteInvalid) as caught:
+                self.mod.run_auth_command(
+                    {"command": command, "args": [secret]}
+                )
+        exception = caught.exception
+        formatted = "".join(
+            traceback.format_exception(
+                type(exception), exception, exception.__traceback__
+            )
+        )
+        self.assertIsNone(exception.__cause__)
+        self.assertIsNone(exception.__context__)
+        for sentinel in (command, secret):
+            self.assertNotIn(sentinel, formatted)
+            self.assertNotIn(sentinel, repr(exception.__cause__))
+            self.assertNotIn(sentinel, repr(exception.__context__))
+
     def test_run_auth_command_returns_trimmed_stdout(self) -> None:
         completed = Mock(returncode=0, stdout=" command-secret\n")
         with patch.object(self.mod.subprocess, "run", return_value=completed) as run:
@@ -371,14 +410,19 @@ class AuthCommandTests(unittest.TestCase):
         self.assertEqual(token, "command-secret")
         run.assert_called_once()
 
-    def test_run_auth_command_rejects_timeout(self) -> None:
-        with patch.object(
-            self.mod.subprocess,
-            "run",
-            side_effect=subprocess.TimeoutExpired(["credential-helper"], 1),
-        ):
-            with self.assertRaises(self.mod.RouteInvalid):
-                self.mod.run_auth_command({"command": "credential-helper"})
+    def test_run_auth_command_timeout_hides_exception_context(self) -> None:
+        self.assert_auth_failure_is_sanitized(
+            subprocess.TimeoutExpired(
+                ["sentinel-command", "sentinel-secret"],
+                1,
+                output="sentinel-secret",
+            )
+        )
+
+    def test_run_auth_command_os_error_hides_exception_context(self) -> None:
+        self.assert_auth_failure_is_sanitized(
+            OSError("sentinel-command failed with sentinel-secret")
+        )
 
     def test_run_auth_command_rejects_nonzero_exit(self) -> None:
         completed = Mock(returncode=1, stdout="unused")
