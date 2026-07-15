@@ -38,37 +38,39 @@ both workflows' scope.
 
 Clone this repository, then use Codex's Plugin installation flow to install the
 repository root as the `danko-imagegen` plugin. Codex reads the root
-`.codex-plugin/plugin.json` declaration and automatically registers the local
-MCP server declared in `.mcp.json`; do not copy the Skill into your Codex Skills
-directory for the normal setup path.
+`.codex-plugin/plugin.json` declaration and provides the bundled Skill; do not
+copy the Skill into your Codex Skills directory for the normal setup path.
 
 Configure `DANKOTOKEN_API_KEY` outside this repository, for example in your
 user environment. Set `DANKOTOKEN_BASE_URL` only when you need to explicitly
 override the Danko endpoint. Set `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1` only when
 you intentionally allow reuse of the active Danko Codex credential.
 
-### Python runtime dependencies
+### Install the Danko MCP
 
-Install the repository dependencies in the Python environment that Codex uses
-to run the local MCP server.
+Run the matching installer once after the Plugin is installed. It detects a
+Python 3.10+ command (`python3` then `python` on macOS/Linux; `py`, `python`,
+then `python3` on Windows), creates an isolated `.venv`, installs the repository
+dependencies, and writes the absolute virtual-environment Python path to the
+managed Danko MCP block in `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`).
+It never stores API-key values in the configuration.
 
 ### Windows PowerShell
 
 ```powershell
-python -m pip install -r .\requirements.txt
+.\scripts\install-danko-imagegen.ps1
 ```
 
-### macOS
+### macOS or Linux
 
 ```bash
-python3 -m pip install -r ./requirements.txt
+./scripts/install-danko-imagegen.sh
 ```
 
-### Linux
-
-```bash
-python3 -m pip install -r ./requirements.txt
-```
+Restart Codex after the installer completes. Re-running an installer safely
+replaces only its managed Danko MCP block. If a manually created
+`[mcp_servers.danko_imagegen]` table already exists outside that block, the
+installer stops without changing it.
 
 ### Manual/legacy Skill-copy compatibility
 
@@ -111,8 +113,9 @@ default when the MCP is available.
 
 ### Compatibility/manual MCP TOML setup
 
-Plugin installation is the normal setup path. Use this manual MCP TOML
-compatibility option only when you cannot install the repository as a plugin.
+Plugin installation plus its platform installer is the normal setup path. Use
+this manual MCP TOML compatibility option only when you cannot run the
+installer.
 Add this secret-free configuration to Codex, replacing the placeholder paths
 with local absolute paths. `env_vars` forwards variable names only; never put a
 key value in this file.

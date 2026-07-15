@@ -16,7 +16,6 @@
     "MCP"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Danko ImageGen",
     "shortDescription": "Generate and edit images through Danko MCP",

@@ -1,12 +1,17 @@
 import ast
 import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_MANIFEST = ROOT / ".codex-plugin" / "plugin.json"
-MCP_CONFIGURATION = ROOT / ".mcp.json"
+INSTALLER_CONFIG_WRITER = ROOT / "scripts" / "write_mcp_config.py"
+INSTALLER_SH = ROOT / "scripts" / "install-danko-imagegen.sh"
+INSTALLER_PS1 = ROOT / "scripts" / "install-danko-imagegen.ps1"
 SKILL_DIR = ROOT / "skills" / "third-party-imagegen"
 GENERATE_IMAGE = SKILL_DIR / "scripts" / "generate_image.py"
 README_ZH = ROOT / "README.md"
@@ -71,8 +76,8 @@ LEGACY_CLI_SECTION_EN = "## Legacy CLI: Active Codex Provider Text-to-Image"
 LEGACY_CLI_SECTION_ZH = "## 旧版 CLI：跟随活动 Codex 提供商（仅文本生成图像）"
 PLUGIN_INSTALLATION_SECTION_EN = "### Plugin installation (recommended)"
 PLUGIN_INSTALLATION_SECTION_ZH = "### 插件安装（推荐）"
-PLUGIN_INSTALLATION_END_EN = "### Python runtime dependencies"
-PLUGIN_INSTALLATION_END_ZH = "### Python 运行时依赖"
+PLUGIN_INSTALLATION_END_EN = "### Manual/legacy Skill-copy compatibility"
+PLUGIN_INSTALLATION_END_ZH = "### 手动/旧版 Skill 复制兼容性"
 SKILL_COPY_COMPATIBILITY_SECTION_EN = "### Manual/legacy Skill-copy compatibility"
 SKILL_COPY_COMPATIBILITY_SECTION_ZH = "### 手动/旧版 Skill 复制兼容性"
 INSTALLATION_END_EN = "## Danko MCP Image Tools (Recommended)"
@@ -106,11 +111,8 @@ def section_after(document: str, heading: str, next_heading: str | None = None) 
 
 
 class SkillContractTests(unittest.TestCase):
-    def test_root_plugin_and_mcp_declarations_match_contract(self) -> None:
+    def test_root_plugin_and_installer_declarations_match_contract(self) -> None:
         manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
-        mcp_configuration = json.loads(
-            MCP_CONFIGURATION.read_text(encoding="utf-8")
-        )
 
         self.assertEqual("danko-imagegen", manifest["name"])
         self.assertEqual("0.1.0", manifest["version"])
@@ -125,7 +127,7 @@ class SkillContractTests(unittest.TestCase):
             manifest["repository"],
         )
         self.assertEqual("./skills/", manifest["skills"])
-        self.assertEqual("./.mcp.json", manifest["mcpServers"])
+        self.assertNotIn("mcpServers", manifest)
         self.assertEqual("Danko ImageGen", manifest["interface"]["displayName"])
         self.assertEqual("Productivity", manifest["interface"]["category"])
         self.assertEqual(
@@ -133,23 +135,42 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertLessEqual(len(manifest["interface"]["defaultPrompt"]), 2)
 
-        servers = mcp_configuration["mcpServers"]
-        self.assertEqual({"danko-imagegen"}, set(servers))
-        self.assertEqual(
-            {
-                "command": "python",
-                "args": [
-                    "./skills/third-party-imagegen/mcp_server/danko_imagegen_server.py"
-                ],
-                "cwd": ".",
-                "env_vars": [
-                    "DANKOTOKEN_API_KEY",
-                    "DANKOTOKEN_BASE_URL",
-                    "DANKOTOKEN_ALLOW_CODEX_FALLBACK",
-                ],
-            },
-            servers["danko-imagegen"],
-        )
+        self.assertTrue(INSTALLER_CONFIG_WRITER.is_file())
+        self.assertTrue(INSTALLER_SH.is_file())
+        self.assertTrue(INSTALLER_PS1.is_file())
+        self.assertFalse((ROOT / ".mcp.json").exists())
+
+    def test_config_writer_manages_only_its_own_danko_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config = Path(temporary_directory) / "config.toml"
+            command = [
+                sys.executable,
+                str(INSTALLER_CONFIG_WRITER),
+                "--config",
+                str(config),
+                "--python",
+                "/tmp/danko/.venv/bin/python",
+                "--server",
+                "/tmp/danko/server.py",
+                "--cwd",
+                "/tmp/danko",
+            ]
+            subprocess.run(command, check=True, capture_output=True, text=True)
+            first_install = config.read_text(encoding="utf-8")
+            self.assertIn("# BEGIN DANKO_IMAGEGEN MCP", first_install)
+            self.assertIn('command = "/tmp/danko/.venv/bin/python"', first_install)
+            self.assertIn(MCP_ENV_VARS_TOML, first_install)
+
+            subprocess.run(command, check=True, capture_output=True, text=True)
+            self.assertEqual(first_install, config.read_text(encoding="utf-8"))
+
+            config.write_text(
+                first_install + "[mcp_servers.danko_imagegen]\ncommand = \"python\"\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("outside the managed installer block", result.stderr)
 
     def test_bilingual_danko_mcp_sections_match_the_documentation_contract(self) -> None:
         chinese = README_ZH.read_text(encoding="utf-8")
@@ -246,7 +267,7 @@ class SkillContractTests(unittest.TestCase):
             skill_copy_section,
             installation_end,
             manual_mcp_section,
-            automatic_registration,
+            installer_contract,
             external_key_configuration,
         ) in (
             (
@@ -257,7 +278,7 @@ class SkillContractTests(unittest.TestCase):
                 SKILL_COPY_COMPATIBILITY_SECTION_EN,
                 INSTALLATION_END_EN,
                 MANUAL_MCP_SECTION_EN,
-                "automatically registers the local\nMCP server",
+                "detects a\nPython 3.10+ command",
                 "Configure `DANKOTOKEN_API_KEY` outside this repository",
             ),
             (
@@ -268,7 +289,7 @@ class SkillContractTests(unittest.TestCase):
                 SKILL_COPY_COMPATIBILITY_SECTION_ZH,
                 INSTALLATION_END_ZH,
                 MANUAL_MCP_SECTION_ZH,
-                "自动注册 `.mcp.json` 中声明的本地 MCP 服务器",
+                "检测 Python 3.10+",
                 "请在仓库外部配置 `DANKOTOKEN_API_KEY`",
             ),
         ):
@@ -285,10 +306,10 @@ class SkillContractTests(unittest.TestCase):
             for term in (
                 "danko-imagegen",
                 ".codex-plugin/plugin.json",
-                ".mcp.json",
+                "install-danko-imagegen",
                 "DANKOTOKEN_API_KEY",
                 plugin_section,
-                automatic_registration,
+                installer_contract,
                 external_key_configuration,
             ):
                 with self.subTest(language=language, term=term):

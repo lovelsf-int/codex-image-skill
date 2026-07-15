@@ -31,34 +31,34 @@
 
 克隆本仓库后，通过 Codex 的插件安装流程将仓库根目录安装为
 `danko-imagegen` 插件。Codex 会读取根目录的 `.codex-plugin/plugin.json`
-声明，并自动注册 `.mcp.json` 中声明的本地 MCP 服务器；正常安装路径无需将
-Skill 复制到 Codex Skills 目录。
+声明并提供仓库内的 Skill；正常安装路径无需将 Skill 复制到 Codex Skills 目录。
 
 请在仓库外部配置 `DANKOTOKEN_API_KEY`，例如配置为用户环境变量。仅在需要显式
 覆盖 Danko 端点时设置 `DANKOTOKEN_BASE_URL`。只有在你有意允许复用活动的 Danko
 Codex 凭据时，才设置 `DANKOTOKEN_ALLOW_CODEX_FALLBACK=1`。
 
-### Python 运行时依赖
+### 安装 Danko MCP
 
-请在 Codex 用于运行本地 MCP 服务器的 Python 环境中安装本仓库依赖。
+插件安装后运行一次对应的安装器。它会检测 Python 3.10+（macOS/Linux 依次检查
+`python3`、`python`；Windows 依次检查 `py`、`python`、`python3`），创建隔离的
+`.venv`、安装仓库依赖，并把该虚拟环境的绝对 Python 路径写入
+`$CODEX_HOME/config.toml`（或 `~/.codex/config.toml`）中的 Danko MCP 托管配置块。
+它不会将 API Key 值写入配置。
 
 ### Windows PowerShell
 
 ```powershell
-python -m pip install -r .\requirements.txt
+.\scripts\install-danko-imagegen.ps1
 ```
 
-### macOS
+### macOS 或 Linux
 
 ```bash
-python3 -m pip install -r ./requirements.txt
+./scripts/install-danko-imagegen.sh
 ```
 
-### Linux
-
-```bash
-python3 -m pip install -r ./requirements.txt
-```
+安装完成后重启 Codex。重复运行安装器只会替换它自己的 Danko MCP 托管配置块；若已存在
+未由安装器管理的 `[mcp_servers.danko_imagegen]` 表，安装器会停止且不会修改该表。
 
 ### 手动/旧版 Skill 复制兼容性
 
@@ -95,7 +95,7 @@ cp -R ./skills/third-party-imagegen "$HOME/.codex/skills/third-party-imagegen"
 
 ### 兼容性/手动 MCP TOML 配置
 
-插件安装是正常的设置路径。仅在无法将本仓库安装为插件时，才使用此手动 MCP TOML
+插件安装加平台安装器是正常的设置路径。仅在无法运行安装器时，才使用此手动 MCP TOML
 兼容性选项。将下面的无密钥配置加入 Codex，并将占位路径替换为本机绝对路径。`env_vars`
 只转发环境变量名；不要在此文件中填写任何密钥值。
 
